@@ -15,6 +15,7 @@ import {
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius } from '../constants/theme';
+import { userState } from '../constants/userState';
 
 // ==== Sample Data ====
 const ANGKATAN_OPTIONS = ['2021', '2022', '2023', '2024', '2025'];
@@ -119,7 +120,7 @@ const dropStyles = StyleSheet.create({
   placeholder: { color: Colors.textPlaceholder },
   overlay: { flex: 1, justifyContent: 'flex-end' },
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: Colors.overlay,
   },
   sheet: {
@@ -178,6 +179,7 @@ export default function CompleteProfileScreen() {
   const handleSave = () => {
     if (!validate()) return;
     setLoading(true);
+    userState.setNama(nama);
     setTimeout(() => {
       setLoading(false);
       router.replace('/home');
