@@ -18,7 +18,7 @@ export default function RootLayout() {
         <Stack.Screen name="register" />
         <Stack.Screen name="verify-otp" />
         <Stack.Screen name="complete-profile" />
-        <Stack.Screen name="home" />
+        <Stack.Screen name="(tabs)" />
       </Stack>
     </>
   );
