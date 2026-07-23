@@ -120,7 +120,7 @@ const dropStyles = StyleSheet.create({
   placeholder: { color: Colors.textPlaceholder },
   overlay: { flex: 1, justifyContent: 'flex-end' },
   backdrop: {
-    ...StyleSheet.absoluteFill,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: Colors.overlay,
   },
   sheet: {

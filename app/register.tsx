@@ -26,12 +26,18 @@ export default function RegisterScreen() {
 
   const validate = () => {
     const newErrors: { email?: string; password?: string } = {};
-    const emailRegex = /^[a-zA-Z0-9._%+-]+@(moklet\.sch\.id|student\.moklet\.sch\.id)$/;
-    if (!email) {
+    const schoolEmailRegex = /^[a-zA-Z0-9._%+-]+@(moklet\.sch\.id|student\.moklet\.sch\.id|smktelkom-mlg\.sch\.id|student\.smktelkom-mlg\.sch\.id)$/i;
+    const generalEmailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const cleanEmail = email.trim();
+
+    if (!cleanEmail) {
       newErrors.email = 'Email wajib diisi';
-    } else if (!emailRegex.test(email)) {
-      newErrors.email = 'Gunakan email sekolah (@moklet.sch.id)';
+    } else if (!generalEmailRegex.test(cleanEmail)) {
+      newErrors.email = 'Format email tidak valid';
+    } else if (!schoolEmailRegex.test(cleanEmail)) {
+      newErrors.email = 'Gunakan email sekolah (@moklet.sch.id / @smktelkom-mlg.sch.id)';
     }
+
     if (!password) {
       newErrors.password = 'Password wajib diisi';
     } else if (password.length < 8) {
@@ -44,10 +50,11 @@ export default function RegisterScreen() {
   const handleSendOTP = async () => {
     if (!validate()) return;
     setLoading(true);
+    const cleanEmail = email.trim().toLowerCase();
     setTimeout(() => {
       setLoading(false);
-      router.push({ pathname: '/verify-otp', params: { email } });
-    }, 1500);
+      router.push({ pathname: '/verify-otp', params: { email: cleanEmail } });
+    }, 1200);
   };
 
   const handleGoogleSignUp = () => {
