@@ -20,7 +20,6 @@ const { width } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.85;
 
 // ==== Dummy Data ====
-const CATEGORIES = ['Semua', 'Olahraga', 'Akademik', 'Lainnya'];
 
 const DUMMY_EVENTS = [
   {
@@ -72,31 +71,26 @@ const DUMMY_ANNOUNCEMENTS = [
 ];
 
 export default function HomeScreen() {
-  const [activeCategory, setActiveCategory] = useState('Semua');
   const [searchQuery, setSearchQuery] = useState('');
-  
+
   const username = userState.getNama();
 
-  // Filter events based on active category and search query
+  // Filter events based on search query
   const filteredEvents = DUMMY_EVENTS.filter((event) => {
-    const matchesCategory = activeCategory === 'Semua' || event.category === activeCategory;
-    const matchesSearch = event.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          event.location.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
+    return event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      event.location.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
-  // Filter announcements based on active category and search query
+  // Filter announcements based on search query
   const filteredAnnouncements = DUMMY_ANNOUNCEMENTS.filter((ann) => {
-    const matchesCategory = activeCategory === 'Semua' || ann.type === activeCategory;
-    const matchesSearch = ann.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          ann.description.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
+    return ann.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      ann.description.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView 
-        style={styles.scrollContainer} 
+      <ScrollView
+        style={styles.scrollContainer}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
@@ -108,9 +102,9 @@ export default function HomeScreen() {
             </View>
             <Text style={styles.headerTitle}>Moklet Event Center</Text>
           </View>
-          <Image 
-            source={{ uri: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150' }} 
-            style={styles.avatar} 
+          <Image
+            source={{ uri: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150' }}
+            style={styles.avatar}
           />
         </View>
 
@@ -134,32 +128,7 @@ export default function HomeScreen() {
           />
         </View>
 
-        {/* CATEGORY CHIPS */}
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false} 
-          style={styles.categoriesScroll}
-          contentContainerStyle={styles.categoriesContainer}
-        >
-          {CATEGORIES.map((category) => {
-            const isActive = activeCategory === category;
-            return (
-              <TouchableOpacity
-                key={category}
-                style={[
-                  styles.chip,
-                  isActive ? styles.chipActive : styles.chipInactive,
-                ]}
-                onPress={() => setActiveCategory(category)}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.chipText, isActive ? styles.chipTextActive : styles.chipTextInactive]}>
-                  {category}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+
 
         {/* EVENT AKTIF SECTION */}
         <View style={styles.sectionHeader}>
@@ -182,7 +151,7 @@ export default function HomeScreen() {
               <TouchableOpacity key={event.id} style={styles.eventCard} activeOpacity={0.95}>
                 <View style={styles.imageWrapper}>
                   <Image source={{ uri: event.image }} style={styles.eventImage} />
-                  
+
                   {/* Status Badge */}
                   <View style={styles.statusBadge}>
                     <View style={styles.statusDot} />
@@ -237,10 +206,10 @@ export default function HomeScreen() {
               return (
                 <View key={ann.id} style={[styles.annCard, { borderLeftColor: indicatorColor }]}>
                   <View style={[styles.annIconWrapper, { backgroundColor: bgIconColor }]}>
-                    <Ionicons 
-                      name={ann.icon as any} 
-                      size={20} 
-                      color={indicatorColor} 
+                    <Ionicons
+                      name={ann.icon as any}
+                      size={20}
+                      color={indicatorColor}
                     />
                   </View>
                   <View style={styles.annContent}>
@@ -344,39 +313,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.textMain,
   },
-  categoriesScroll: {
-    marginBottom: Spacing.xl,
-  },
-  categoriesContainer: {
-    paddingHorizontal: Spacing.xl,
-    gap: Spacing.sm,
-  },
-  chip: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: 8,
-    borderRadius: Radius.round,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  chipActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  chipInactive: {
-    backgroundColor: Colors.white,
-    borderColor: Colors.inputBorder,
-  },
-  chipText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  chipTextActive: {
-    color: Colors.white,
-  },
-  chipTextInactive: {
-    color: Colors.textSubtitle,
-  },
+
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
