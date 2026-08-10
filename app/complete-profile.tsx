@@ -19,16 +19,56 @@ import { Colors, Spacing, Radius } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 import api, { ApiErrorResponse } from '../services/api';
 
+export interface RawCandidateStudent {
+  studentId?: string;
+  id?: string;
+  name: string;
+  className?: string;
+  nis?: string;
+  angkatan?: string | number;
+  isSuggested?: boolean;
+  class?: {
+    id?: string;
+    grade?: string;
+    name?: string;
+  };
+  classId?: string;
+}
+
 export interface CandidateStudent {
   id: string;
   name: string;
   nis: string;
-  angkatan?: string | number;
-  classId?: string;
-  class?: {
-    id: string;
-    grade: string;
-    name: string;
+  angkatan: string;
+  className: string;
+  isSuggested: boolean;
+}
+
+export function normalizeCandidate(raw: RawCandidateStudent): CandidateStudent {
+  const className =
+    raw.className ||
+    (raw.class ? `${raw.class.grade || ''} ${raw.class.name || ''}`.trim() : '') ||
+    'Kelas Tidak Diketahui';
+
+  let angkatan = 'Lainnya';
+  if (raw.angkatan !== undefined && raw.angkatan !== null && String(raw.angkatan).trim() !== '') {
+    angkatan = String(raw.angkatan).trim();
+  } else if (raw.class?.grade) {
+    angkatan = String(raw.class.grade).trim();
+  } else if (className && className !== 'Kelas Tidak Diketahui') {
+    const firstWord = className.trim().split(/\s+/)[0];
+    if (firstWord) {
+      angkatan = firstWord;
+    }
+  }
+
+  return {
+    id: raw.studentId || raw.id || '',
+    name: raw.name || '',
+    nis: raw.nis || '-',
+    className,
+    angkatan,
+    isSuggested: Boolean(raw.isSuggested),
   };
 }
 
@@ -91,7 +131,7 @@ function DropdownField({
             {options.length > 0 ? (
               <FlatList
                 data={options}
-                keyExtractor={(item) => item.value}
+                keyExtractor={(item, index) => `${item.value}-${index}`}
                 showsVerticalScrollIndicator={false}
                 renderItem={({ item }) => (
                   <TouchableOpacity
@@ -208,7 +248,8 @@ export default function CompleteProfileScreen() {
       setFetchingCandidates(true);
       try {
         const res: any = await api.get('/students/bind-candidates');
-        const list: CandidateStudent[] = Array.isArray(res) ? res : res?.data || [];
+        const rawList: RawCandidateStudent[] = Array.isArray(res) ? res : res?.data || [];
+        const list: CandidateStudent[] = rawList.map(normalizeCandidate);
         setCandidates(list);
       } catch (err: any) {
         console.warn('Error loading bind candidates:', err);
@@ -224,7 +265,7 @@ export default function CompleteProfileScreen() {
   const angkatanOptions = Array.from(
     new Set(
       candidates
-        .map((c) => String(c.angkatan || c.class?.grade || 'Lainnya'))
+        .map((c) => c.angkatan)
         .filter(Boolean)
     )
   ).map((a) => ({ label: `Angkatan / Tingkat ${a}`, value: a }));
@@ -232,19 +273,13 @@ export default function CompleteProfileScreen() {
   // Derive Opsi Kelas berdasarkan Angkatan yang dipilih
   const filteredCandidatesForKelas = candidates.filter((c) => {
     if (!selectedAngkatan) return true;
-    const ang = String(c.angkatan || c.class?.grade || 'Lainnya');
-    return ang === selectedAngkatan;
+    return c.angkatan === selectedAngkatan;
   });
 
   const kelasOptions = Array.from(
     new Set(
       filteredCandidatesForKelas
-        .map((c) => {
-          if (c.class) {
-            return `${c.class.grade} ${c.class.name}`.trim();
-          }
-          return c.classId || 'Kelas Tidak Diketahui';
-        })
+        .map((c) => c.className)
         .filter(Boolean)
     )
   ).map((k) => ({ label: k, value: k }));
@@ -252,12 +287,23 @@ export default function CompleteProfileScreen() {
   // Derive Opsi Nama Siswa berdasarkan Kelas & Angkatan terpilih
   const filteredStudents = filteredCandidatesForKelas.filter((c) => {
     if (!selectedKelas) return true;
-    const fullClass = c.class ? `${c.class.grade} ${c.class.name}`.trim() : c.classId;
-    return fullClass === selectedKelas;
+    return c.className === selectedKelas;
   });
 
-  const studentOptions = filteredStudents.map((s) => ({
-    label: `${s.name} (${s.nis || 'NIS -'})`,
+  // Deduplicate candidates by id
+  const uniqueStudentsMap = new Map<string, CandidateStudent>();
+  filteredStudents.forEach((s) => {
+    if (s.id && !uniqueStudentsMap.has(s.id)) {
+      uniqueStudentsMap.set(s.id, s);
+    }
+  });
+
+  console.log(`[CompleteProfile] filteredStudents.length: ${filteredStudents.length}, uniqueIdCount: ${uniqueStudentsMap.size}`);
+
+  const uniqueStudents = Array.from(uniqueStudentsMap.values());
+
+  const studentOptions = uniqueStudents.map((s) => ({
+    label: `${s.name} (${s.nis !== '-' ? s.nis : 'NIS -'})`,
     value: s.id,
   }));
 

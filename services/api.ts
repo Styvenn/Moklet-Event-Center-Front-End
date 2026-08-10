@@ -3,7 +3,7 @@ import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
-export const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://moklet.up.railway.app';
+export const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://birumoklet.up.railway.app';
 const TOKEN_KEY = 'mec_auth_token';
 
 // Helper storage aman untuk Web & Mobile Native

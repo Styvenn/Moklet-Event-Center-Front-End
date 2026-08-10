@@ -11,18 +11,23 @@ import {
   Pressable,
   Image,
 } from 'react-native';
-import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius } from '../../constants/theme';
-import { userState } from '../../constants/userState';
+import { useAuth } from '../../context/AuthContext';
 
 export default function ProfileScreen() {
-  const username = userState.getNama() || 'Dimas Saputra';
+  const { user, logout } = useAuth();
+  const username = user?.student?.name || user?.email?.split('@')[0] || 'Siswa';
+  const classLabel = user?.student?.class
+    ? `${user.student.class.grade} ${user.student.class.name}`
+    : (user?.role ?? 'Siswa');
+  const avatarUrl = user?.student?.avatarUrl
+    || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80';
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setShowLogoutModal(false);
-    router.replace('/login');
+    await logout();
   };
 
   return (
@@ -36,13 +41,13 @@ export default function ProfileScreen() {
       <View style={styles.profileCard}>
         <View style={styles.avatarBorder}>
           <Image
-            source={{ uri: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80' }}
+            source={{ uri: avatarUrl }}
             style={styles.avatarImage}
           />
         </View>
         <View style={styles.profileTextContainer}>
           <Text style={styles.profileName}>{username}</Text>
-          <Text style={styles.profileSubtitle}>XII RPL 1 • Angkatan 2024</Text>
+          <Text style={styles.profileSubtitle}>{classLabel}</Text>
         </View>
         <TouchableOpacity
           style={styles.logoutIconButton}

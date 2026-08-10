@@ -5,11 +5,14 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   StyleSheet,
   ActivityIndicator,
   SafeAreaView,
+  KeyboardAvoidingView,
   Platform,
   Alert,
+  Keyboard,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -58,6 +61,10 @@ export default function VerifyOTPScreen() {
     // Auto-advance to next box
     if (digit && index < OTP_LENGTH - 1) {
       inputRefs.current[index + 1]?.focus();
+    }
+    // Auto-dismiss keyboard when last digit is filled
+    if (digit && index === OTP_LENGTH - 1 && newOtp.every((d) => d !== '')) {
+      Keyboard.dismiss();
     }
   };
 
@@ -115,95 +122,104 @@ export default function VerifyOTPScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backButton}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        >
-          <Ionicons name="arrow-back" size={22} color={Colors.primary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Moklet Event Center</Text>
-        <View style={styles.headerSpacer} />
-      </View>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+          <View style={{ flex: 1 }}>
+            {/* Header */}
+            <View style={styles.header}>
+              <TouchableOpacity
+                onPress={() => router.back()}
+                style={styles.backButton}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Ionicons name="arrow-back" size={22} color={Colors.primary} />
+              </TouchableOpacity>
+              <Text style={styles.headerTitle}>Moklet Event Center</Text>
+              <View style={styles.headerSpacer} />
+            </View>
 
-      {/* Body */}
-      <View style={styles.container}>
-        <Text style={styles.title}>Masukkan Kode OTP</Text>
-        <Text style={styles.subtitle}>
-          Kode verifikasi telah dikirimkan ke email{'\n'}
-          <Text style={styles.emailHighlight}>{displayEmail}</Text>
-        </Text>
+            {/* Body */}
+            <View style={styles.container}>
+              <Text style={styles.title}>Masukkan Kode OTP</Text>
+              <Text style={styles.subtitle}>
+                Kode verifikasi telah dikirimkan ke email{'\n'}
+                <Text style={styles.emailHighlight}>{displayEmail}</Text>
+              </Text>
 
-        {errorMsg ? (
-          <View style={styles.errorBox}>
-            <Ionicons name="alert-circle-outline" size={18} color={Colors.error} />
-            <Text style={styles.errorText}>{errorMsg}</Text>
-          </View>
-        ) : null}
+              {errorMsg ? (
+                <View style={styles.errorBox}>
+                  <Ionicons name="alert-circle-outline" size={18} color={Colors.error} />
+                  <Text style={styles.errorText}>{errorMsg}</Text>
+                </View>
+              ) : null}
 
-        {/* OTP Card */}
-        <View style={styles.otpCard}>
-          {/* 6 OTP Boxes */}
-          <View style={styles.otpRow}>
-            {otp.map((digit, index) => (
-              <TextInput
-                key={index}
-                ref={(ref) => { inputRefs.current[index] = ref; }}
+              {/* OTP Card */}
+              <View style={styles.otpCard}>
+                {/* 6 OTP Boxes */}
+                <View style={styles.otpRow}>
+                  {otp.map((digit, index) => (
+                    <TextInput
+                      key={index}
+                      ref={(ref) => { inputRefs.current[index] = ref; }}
+                      style={[
+                        styles.otpBox,
+                        digit ? styles.otpBoxFilled : null,
+                        errorMsg ? styles.otpBoxError : null,
+                      ]}
+                      value={digit}
+                      onChangeText={(v) => handleOtpChange(v, index)}
+                      onKeyPress={(e) => handleKeyPress(e, index)}
+                      keyboardType="number-pad"
+                      maxLength={1}
+                      textAlign="center"
+                      selectTextOnFocus
+                      autoFocus={index === 0}
+                    />
+                  ))}
+                </View>
+
+                {/* Timer & Resend */}
+                <View style={styles.resendContainer}>
+                  {!canResend ? (
+                    <Text style={styles.countdownText}>
+                      Kirim ulang dalam <Text style={styles.countdownBold}>{formatTime(countdown)}</Text>
+                    </Text>
+                  ) : (
+                    <Text style={styles.countdownText}>Kode sudah kedaluwarsa</Text>
+                  )}
+                  <TouchableOpacity onPress={handleResend} disabled={!canResend}>
+                    <Text style={[styles.resendLink, canResend ? styles.resendLinkActive : styles.resendLinkDisabled]}>
+                      Kirim Ulang OTP
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+
+            {/* Sticky Bottom Button */}
+            <View style={styles.bottomBar}>
+              <TouchableOpacity
                 style={[
-                  styles.otpBox,
-                  digit ? styles.otpBoxFilled : null,
-                  errorMsg ? styles.otpBoxError : null,
+                  styles.verifyButton,
+                  (!isComplete || loading) && styles.verifyButtonDisabled,
                 ]}
-                value={digit}
-                onChangeText={(v) => handleOtpChange(v, index)}
-                onKeyPress={(e) => handleKeyPress(e, index)}
-                keyboardType="number-pad"
-                maxLength={1}
-                textAlign="center"
-                selectTextOnFocus
-                autoFocus={index === 0}
-              />
-            ))}
+                onPress={handleVerify}
+                disabled={!isComplete || loading}
+                activeOpacity={0.85}
+              >
+                {loading ? (
+                  <ActivityIndicator color={Colors.white} size="small" />
+                ) : (
+                  <Text style={styles.verifyButtonText}>Verifikasi</Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
-
-          {/* Timer & Resend */}
-          <View style={styles.resendContainer}>
-            {!canResend ? (
-              <Text style={styles.countdownText}>
-                Kirim ulang dalam <Text style={styles.countdownBold}>{formatTime(countdown)}</Text>
-              </Text>
-            ) : (
-              <Text style={styles.countdownText}>Kode sudah kedaluwarsa</Text>
-            )}
-            <TouchableOpacity onPress={handleResend} disabled={!canResend}>
-              <Text style={[styles.resendLink, canResend ? styles.resendLinkActive : styles.resendLinkDisabled]}>
-                Kirim Ulang OTP
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-
-      {/* Sticky Bottom Button */}
-      <View style={styles.bottomBar}>
-        <TouchableOpacity
-          style={[
-            styles.verifyButton,
-            (!isComplete || loading) && styles.verifyButtonDisabled,
-          ]}
-          onPress={handleVerify}
-          disabled={!isComplete || loading}
-          activeOpacity={0.85}
-        >
-          {loading ? (
-            <ActivityIndicator color={Colors.white} size="small" />
-          ) : (
-            <Text style={styles.verifyButtonText}>Verifikasi</Text>
-          )}
-        </TouchableOpacity>
-      </View>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

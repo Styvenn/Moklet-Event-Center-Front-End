@@ -1,5 +1,5 @@
 // app/arsip-pengumuman.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,110 +9,61 @@ import {
   TouchableOpacity,
   ScrollView,
   TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Colors, Spacing, Radius } from '../constants/theme';
+import api from '../services/api';
 
-const ANNOUNCEMENTS = [
-  {
-    id: '1',
-    title: 'Perubahan Jadwal Sertifikat Turnamen',
-    description:
-      'Pengambilan sertifikat turnamen Moklet Cup 2024 diundur ke tanggal 25 November 2024 di Aula Utama.',
-    date: '15 Nov 2024',
-    statusColor: '#C62828',
-    statusBg: '#FFEBEE',
-    icon: 'alert-circle-outline',
-    category: 'Penting',
-  },
-  {
-    id: '2',
-    title: 'Pemenang Lomba Futsal Putra',
-    description:
-      'Selamat kepada Tim Garuda FC yang telah memenangkan juara pertama cabang Futsal Putra pada Moklet Cup 2024.',
-    date: '12 Nov 2024',
-    statusColor: '#2E7D32',
-    statusBg: '#E8F5E9',
-    icon: 'trophy-outline',
-    category: 'Pengumuman',
-  },
-  {
-    id: '3',
-    title: 'Pendaftaran Jadwal Sertifikasi',
-    description:
-      'Pendaftaran jadwal sertifikasi untuk peserta yang belum mendaftar dibuka kembali mulai 10 November 2024.',
-    date: '08 Nov 2024',
-    statusColor: '#F57C00',
-    statusBg: '#FFF3E0',
-    icon: 'time-outline',
-    category: 'Info',
-  },
-  {
-    id: '4',
-    title: 'Pendaftaran Jadwal Perlombaan',
-    description:
-      'Jadwal perlombaan Moklet Cup 2024 telah dirilis. Peserta diminta memperhatikan jadwal masing-masing cabang.',
-    date: '10 Nov 2024',
-    statusColor: '#1565C0',
-    statusBg: '#E3F2FD',
-    icon: 'calendar-outline',
-    category: 'Jadwal',
-  },
-  {
-    id: '5',
-    title: 'Perubahan Jadwal Lomba',
-    description:
-      'Jadwal babak semifinal Basket Putra diubah menjadi pukul 08.00 WIB di Lapangan Indoor.',
-    date: '12 Nov 2024',
-    statusColor: '#C62828',
-    statusBg: '#FFEBEE',
-    icon: 'refresh-circle-outline',
-    category: 'Penting',
-  },
-  {
-    id: '6',
-    title: 'Pendaftaran Ditutup Sementara',
-    description:
-      'Pendaftaran cabang Futsal ditutup sementara karena kuota telah terpenuhi. Informasi lebih lanjut akan diumumkan.',
-    date: '17 Nov 2024',
-    statusColor: '#F57C00',
-    statusBg: '#FFF3E0',
-    icon: 'close-circle-outline',
-    category: 'Info',
-  },
-  {
-    id: '7',
-    title: 'Jadwal Technical Meeting',
-    description:
-      'Technical meeting untuk semua cabang lomba akan dilaksanakan pada Kamis, 14 November 2024 pukul 13.00 WIB.',
-    date: '08 Nov 2024',
-    statusColor: '#6A1B9A',
-    statusBg: '#F3E5F5',
-    icon: 'people-outline',
-    category: 'Kegiatan',
-  },
-  {
-    id: '8',
-    title: 'Daftar Ulang Peserta Turnamen',
-    description:
-      'Peserta yang sudah terdaftar wajib melakukan daftar ulang sebelum tanggal 15 November 2024.',
-    date: '10 Nov 2024',
-    statusColor: '#2E7D32',
-    statusBg: '#E8F5E9',
-    icon: 'checkmark-circle-outline',
-    category: 'Penting',
-  },
-];
+interface Announcement {
+  id: string;
+  title: string;
+  content: string;
+  createdAt: string;
+  eventId?: string;
+}
+
+function formatDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString('id-ID', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+  } catch {
+    return iso;
+  }
+}
 
 export default function ArsipPengumumanScreen() {
   const [search, setSearch] = useState('');
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
-  const filtered = ANNOUNCEMENTS.filter(
+  useEffect(() => {
+    async function fetchAnnouncements() {
+      try {
+        setLoading(true);
+        setError(false);
+        const res: any = await api.get('/announcements');
+        const list: Announcement[] = Array.isArray(res) ? res : res?.data || [];
+        setAnnouncements(list);
+      } catch (err) {
+        console.warn('Error fetching announcements:', err);
+        setError(true);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchAnnouncements();
+  }, []);
+
+  const filtered = announcements.filter(
     (a) =>
       a.title.toLowerCase().includes(search.toLowerCase()) ||
-      a.description.toLowerCase().includes(search.toLowerCase()) ||
-      a.category.toLowerCase().includes(search.toLowerCase())
+      a.content.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -147,38 +98,47 @@ export default function ArsipPengumumanScreen() {
         </View>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.list}>
-        {filtered.map((ann) => (
-          <TouchableOpacity key={ann.id} style={styles.annCard} activeOpacity={0.85}>
-            {/* Status icon */}
-            <View style={[styles.annIconWrapper, { backgroundColor: ann.statusBg }]}>
-              <Ionicons name={ann.icon as any} size={22} color={ann.statusColor} />
+      {loading ? (
+        <View style={styles.centerState}>
+          <ActivityIndicator color={Colors.primary} size="large" />
+          <Text style={styles.stateText}>Memuat pengumuman...</Text>
+        </View>
+      ) : error ? (
+        <View style={styles.centerState}>
+          <Ionicons name="wifi-outline" size={40} color={Colors.textSubtitle} />
+          <Text style={styles.stateText}>Gagal memuat pengumuman.</Text>
+        </View>
+      ) : (
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.list}>
+          {filtered.length === 0 ? (
+            <View style={styles.centerState}>
+              <Ionicons name="megaphone-outline" size={40} color={Colors.textSubtitle} />
+              <Text style={styles.stateText}>Tidak ada pengumuman ditemukan.</Text>
             </View>
-
-            {/* Content */}
-            <View style={styles.annContent}>
-              <View style={styles.annTopRow}>
-                <Text style={styles.annTitle} numberOfLines={2}>
-                  {ann.title}
-                </Text>
-                <View style={[styles.categoryBadge, { backgroundColor: ann.statusBg }]}>
-                  <Text style={[styles.categoryText, { color: ann.statusColor }]}>
-                    {ann.category}
+          ) : (
+            filtered.map((ann) => (
+              <TouchableOpacity key={ann.id} style={styles.annCard} activeOpacity={0.85}>
+                {/* Content */}
+                <View style={styles.annContent}>
+                  <View style={styles.annTopRow}>
+                    <Text style={styles.annTitle} numberOfLines={2}>
+                      {ann.title}
+                    </Text>
+                  </View>
+                  <Text style={styles.annDesc} numberOfLines={2}>
+                    {ann.content}
                   </Text>
+                  <View style={styles.annFooter}>
+                    <Ionicons name="calendar-outline" size={11} color={Colors.textSubtitle} />
+                    <Text style={styles.annDate}>{formatDate(ann.createdAt)}</Text>
+                  </View>
                 </View>
-              </View>
-              <Text style={styles.annDesc} numberOfLines={2}>
-                {ann.description}
-              </Text>
-              <View style={styles.annFooter}>
-                <Ionicons name="calendar-outline" size={11} color={Colors.textSubtitle} />
-                <Text style={styles.annDate}>{ann.date}</Text>
-              </View>
-            </View>
-          </TouchableOpacity>
-        ))}
-        <View style={{ height: 16 }} />
-      </ScrollView>
+              </TouchableOpacity>
+            ))
+          )}
+          <View style={{ height: 16 }} />
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
@@ -239,6 +199,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.textMain,
   },
+  centerState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: Spacing.xl,
+    gap: Spacing.md,
+  },
+  stateText: {
+    fontSize: 14,
+    color: Colors.textSubtitle,
+    textAlign: 'center',
+  },
   list: {
     padding: Spacing.base,
     gap: Spacing.md,
@@ -255,14 +227,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 1,
   },
-  annIconWrapper: {
-    width: 46,
-    height: 46,
-    borderRadius: Radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
   annContent: {
     flex: 1,
   },
@@ -278,16 +242,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.textMain,
     lineHeight: 20,
-  },
-  categoryBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: Radius.round,
-    flexShrink: 0,
-  },
-  categoryText: {
-    fontSize: 10,
-    fontWeight: '700',
   },
   annDesc: {
     fontSize: 12,

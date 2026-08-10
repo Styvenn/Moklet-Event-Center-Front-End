@@ -1,5 +1,5 @@
 // app/(admin)/siswa.tsx
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import {
   KeyboardAvoidingView,
   RefreshControl,
 } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius } from '../../constants/theme';
 import {
@@ -358,22 +359,32 @@ export default function SiswaScreen() {
   const [showUploadModal, setShowUploadModal] = useState(false);
 
   const fetchAll = useCallback(async () => {
-    try {
-      const [studentsRes, classesRes] = await Promise.all([
-        getStudents(1, 200),
-        getClasses(),
-      ]);
-      setStudents(studentsRes.data);
-      setClasses(classesRes);
-    } catch (e) {
-      console.warn('Siswa fetch error:', e);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+    const [studentsResult, classesResult] = await Promise.allSettled([
+      getStudents(1, 100),
+      getClasses(),
+    ]);
+
+    if (studentsResult.status === 'fulfilled') {
+      setStudents(studentsResult.value.data);
+    } else {
+      console.warn('Gagal memuat data siswa:', studentsResult.reason);
     }
+
+    if (classesResult.status === 'fulfilled') {
+      setClasses(classesResult.value);
+    } else {
+      console.warn('Gagal memuat data kelas:', classesResult.reason);
+    }
+
+    setLoading(false);
+    setRefreshing(false);
   }, []);
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
+  useFocusEffect(
+    useCallback(() => {
+      fetchAll();
+    }, [fetchAll])
+  );
 
   const onRefresh = () => { setRefreshing(true); fetchAll(); };
 
