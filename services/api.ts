@@ -3,7 +3,7 @@ import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
-export const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://birumoklet.up.railway.app';
+export const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://mecbiru.up.railway.app';
 const TOKEN_KEY = 'mec_auth_token';
 
 // Helper storage aman untuk Web & Mobile Native
@@ -92,7 +92,7 @@ api.interceptors.response.use(
     const responseData = error.response?.data;
     const statusCode = error.response?.status || responseData?.statusCode || 500;
     const rawMessage = responseData?.message || error.message || 'Terjadi kesalahan pada server';
-    
+
     let formattedMessage = '';
     if (Array.isArray(rawMessage)) {
       formattedMessage = rawMessage.join('\n');
