@@ -230,27 +230,29 @@ const dropStyles = StyleSheet.create({
 // ==== Main Screen ====
 export default function CompleteProfileScreen() {
   const { bindIdentity } = useAuth();
-  
+
   const [candidates, setCandidates] = useState<CandidateStudent[]>([]);
   const [fetchingCandidates, setFetchingCandidates] = useState(true);
-
-  const [selectedAngkatan, setSelectedAngkatan] = useState('');
-  const [selectedKelas, setSelectedKelas] = useState('');
   const [selectedStudentId, setSelectedStudentId] = useState('');
-  const [selectedStudentName, setSelectedStudentName] = useState('');
-
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState<{ angkatan?: boolean; kelas?: boolean; nama?: boolean; general?: string }>({});
+  const [errors, setErrors] = useState<{ nama?: boolean; general?: string }>({});
 
-  // Fetch candidates dari backend GET /students/bind-candidates
   useEffect(() => {
     async function loadCandidates() {
       setFetchingCandidates(true);
       try {
         const res: any = await api.get('/students/bind-candidates');
         const rawList: RawCandidateStudent[] = Array.isArray(res) ? res : res?.data || [];
-        const list: CandidateStudent[] = rawList.map(normalizeCandidate);
-        setCandidates(list);
+        const list: CandidateStudent[] = rawList.map(normalizeCandidate).filter((student) => student.id && student.name);
+
+        const uniqueCandidatesMap = new Map<string, CandidateStudent>();
+        list.forEach((student) => {
+          if (!uniqueCandidatesMap.has(student.id)) {
+            uniqueCandidatesMap.set(student.id, student);
+          }
+        });
+
+        setCandidates(Array.from(uniqueCandidatesMap.values()));
       } catch (err: any) {
         console.warn('Error loading bind candidates:', err);
         setErrors((e) => ({ ...e, general: 'Gagal memuat data kandidat siswa. Pastikan koneksi aman.' }));
@@ -258,59 +260,17 @@ export default function CompleteProfileScreen() {
         setFetchingCandidates(false);
       }
     }
+
     loadCandidates();
   }, []);
 
-  // Derive Opsi Angkatan
-  const angkatanOptions = Array.from(
-    new Set(
-      candidates
-        .map((c) => c.angkatan)
-        .filter(Boolean)
-    )
-  ).map((a) => ({ label: `Angkatan / Tingkat ${a}`, value: a }));
-
-  // Derive Opsi Kelas berdasarkan Angkatan yang dipilih
-  const filteredCandidatesForKelas = candidates.filter((c) => {
-    if (!selectedAngkatan) return true;
-    return c.angkatan === selectedAngkatan;
-  });
-
-  const kelasOptions = Array.from(
-    new Set(
-      filteredCandidatesForKelas
-        .map((c) => c.className)
-        .filter(Boolean)
-    )
-  ).map((k) => ({ label: k, value: k }));
-
-  // Derive Opsi Nama Siswa berdasarkan Kelas & Angkatan terpilih
-  const filteredStudents = filteredCandidatesForKelas.filter((c) => {
-    if (!selectedKelas) return true;
-    return c.className === selectedKelas;
-  });
-
-  // Deduplicate candidates by id
-  const uniqueStudentsMap = new Map<string, CandidateStudent>();
-  filteredStudents.forEach((s) => {
-    if (s.id && !uniqueStudentsMap.has(s.id)) {
-      uniqueStudentsMap.set(s.id, s);
-    }
-  });
-
-  console.log(`[CompleteProfile] filteredStudents.length: ${filteredStudents.length}, uniqueIdCount: ${uniqueStudentsMap.size}`);
-
-  const uniqueStudents = Array.from(uniqueStudentsMap.values());
-
-  const studentOptions = uniqueStudents.map((s) => ({
-    label: `${s.name} (${s.nis !== '-' ? s.nis : 'NIS -'})`,
-    value: s.id,
+  const studentOptions = candidates.map((student) => ({
+    label: `${student.name} ${student.className ? `- ${student.className}` : ''}`.trim(),
+    value: student.id,
   }));
 
   const validate = () => {
     const newErrors: typeof errors = {};
-    if (!selectedAngkatan && angkatanOptions.length > 0) newErrors.angkatan = true;
-    if (!selectedKelas && kelasOptions.length > 0) newErrors.kelas = true;
     if (!selectedStudentId) newErrors.nama = true;
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -318,29 +278,34 @@ export default function CompleteProfileScreen() {
 
   const handleSave = async () => {
     if (!validate()) return;
+
     setLoading(true);
     setErrors({});
 
     try {
       await bindIdentity(selectedStudentId);
-      setLoading(false);
       router.replace('/(tabs)/home');
     } catch (err: any) {
-      setLoading(false);
       const apiErr = err as ApiErrorResponse;
       setErrors({ general: apiErr.formattedMessage || 'Gagal menautkan identitas siswa.' });
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <View style={styles.headerBar}>
+        <Text style={styles.headerText}>Lengkapi Profil - Moklet Event Center</Text>
+      </View>
+
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.title}>Cari Data Anda</Text>
-        <Text style={styles.subtitle}>Pilih identitas siswa kamu dari data sekolah lalu periksa kembali sebelum menyimpan.</Text>
+        <Text style={styles.title}>Periksa Data Diri</Text>
+        <Text style={styles.subtitle}>Periksa data diri supaya tidak tertukar.</Text>
 
         {errors.general ? (
           <View style={styles.errorBox}>
@@ -356,66 +321,28 @@ export default function CompleteProfileScreen() {
           </View>
         ) : (
           <View style={styles.form}>
-            {angkatanOptions.length > 0 && (
-              <>
-                <DropdownField
-                  label="Angkatan / Tingkat"
-                  placeholder="Pilih Angkatan / Tingkat"
-                  options={angkatanOptions}
-                  value={selectedAngkatan}
-                  onSelect={(val) => {
-                    setSelectedAngkatan(val);
-                    setSelectedKelas('');
-                    setSelectedStudentId('');
-                    setSelectedStudentName('');
-                    setErrors((e) => ({ ...e, angkatan: false, general: undefined }));
-                  }}
-                  hasError={errors.angkatan}
-                />
-                {errors.angkatan && <Text style={styles.errorText}>Angkatan wajib dipilih</Text>}
-              </>
-            )}
-
+            
             <DropdownField
-              label="Kelas"
-              placeholder={selectedAngkatan ? 'Pilih Kelas' : 'Pilih Angkatan terlebih dahulu'}
-              options={kelasOptions}
-              value={selectedKelas}
-              disabled={angkatanOptions.length > 0 && !selectedAngkatan}
-              onSelect={(val) => {
-                setSelectedKelas(val);
-                setSelectedStudentId('');
-                setSelectedStudentName('');
-                setErrors((e) => ({ ...e, kelas: false, general: undefined }));
-              }}
-              hasError={errors.kelas}
-            />
-            {errors.kelas && <Text style={styles.errorText}>Kelas wajib dipilih</Text>}
-
-            <DropdownField
-              label="Nama Siswa"
-              placeholder={selectedKelas ? 'Pilih Nama Siswa' : 'Pilih Kelas terlebih dahulu'}
+              label="Data Siswa"
+              placeholder="Pilih Data"
               options={studentOptions}
               value={selectedStudentId}
-              disabled={!selectedKelas && kelasOptions.length > 0}
-              onSelect={(val, label) => {
+              onSelect={(val) => {
                 setSelectedStudentId(val);
-                setSelectedStudentName(label);
                 setErrors((e) => ({ ...e, nama: false, general: undefined }));
               }}
               hasError={errors.nama}
             />
-            {errors.nama && <Text style={styles.errorText}>Nama siswa wajib dipilih</Text>}
+            {errors.nama && <Text style={styles.errorText}>Data siswa wajib dipilih</Text>}
           </View>
         )}
       </ScrollView>
 
-      {/* Sticky Bottom Button */}
       <View style={styles.bottomBar}>
         <TouchableOpacity
-          style={[styles.saveButton, (loading || fetchingCandidates) ? styles.saveButtonDisabled : null]}
+          style={[styles.saveButton, (loading || fetchingCandidates || !selectedStudentId) ? styles.saveButtonDisabled : null]}
           onPress={handleSave}
-          disabled={loading || fetchingCandidates}
+          disabled={loading || fetchingCandidates || !selectedStudentId}
           activeOpacity={0.85}
         >
           {loading ? (
@@ -440,6 +367,20 @@ const styles = StyleSheet.create({
     padding: Spacing.xl,
     paddingBottom: Spacing.xxxl,
   },
+  headerBar: {
+    backgroundColor: '#F2F5F7',
+    paddingVertical: 18,
+    paddingHorizontal: Spacing.base,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E1E7EC',
+  },
+  headerText: {
+    color: '#0B2E4A',
+    fontSize: 18,
+    fontWeight: '700',
+  },
   title: {
     fontSize: 26,
     fontWeight: '700',
@@ -454,6 +395,12 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xl,
   },
   form: { gap: 0 },
+  fieldLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textMain,
+    marginBottom: Spacing.sm,
+  },
   loadingBox: {
     paddingVertical: 40,
     alignItems: 'center',
