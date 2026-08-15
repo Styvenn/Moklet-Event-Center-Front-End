@@ -1,5 +1,4 @@
-// app/(admin)/panitia.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,10 +12,12 @@ import {
   Modal,
   KeyboardAvoidingView,
   ScrollView,
+  RefreshControl,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius } from '../../constants/theme';
-import { createPanitia, PanitiaItem } from '../../services/admin/panitia.service';
+import { createPanitia, getPanitia, togglePanitiaStatus, PanitiaItem } from '../../services/admin/panitia.service';
 
 // ─── Modal Buat Akun Panitia ──────────────────────────────────────────────────
 
@@ -159,10 +160,67 @@ function CreatePanitiaModal({ visible, onClose, onSuccess }: CreatePanitiaModalP
 
 export default function PanitiaScreen() {
   const [panitiaList, setPanitiaList] = useState<PanitiaItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [showModal, setShowModal] = useState(false);
+
+  const fetchPanitiaList = useCallback(async () => {
+    try {
+      setLoadError(false);
+      const list = await getPanitia();
+      setPanitiaList(list);
+    } catch (e: any) {
+      console.warn('Failed to fetch panitia list:', e);
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchPanitiaList();
+  }, [fetchPanitiaList]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchPanitiaList();
+  };
 
   const handlePanitiaCreated = (newPanitia: PanitiaItem) => {
     setPanitiaList((prev) => [newPanitia, ...prev]);
+    // Refresh to get server source of truth
+    fetchPanitiaList();
+  };
+
+  const handleToggleStatus = (item: PanitiaItem) => {
+    const nextStatus = !item.isActive;
+    Alert.alert(
+      'Ubah Status Panitia',
+      `Apakah Anda yakin ingin mengubah status ${item.email} menjadi ${nextStatus ? 'Aktif' : 'Non-aktif'}?`,
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Ya, Ubah',
+          onPress: async () => {
+            // Optimistic update
+            setPanitiaList((prev) =>
+              prev.map((p) => (p.id === item.id ? { ...p, isActive: nextStatus } : p))
+            );
+            try {
+              await togglePanitiaStatus(item.id, nextStatus);
+            } catch (err: any) {
+              // Rollback
+              setPanitiaList((prev) =>
+                prev.map((p) => (p.id === item.id ? { ...p, isActive: item.isActive } : p))
+              );
+              Alert.alert('Gagal', err?.message || 'Gagal mengubah status panitia.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const renderPanitia = ({ item }: { item: PanitiaItem }) => {
@@ -180,11 +238,15 @@ export default function PanitiaScreen() {
               : 'Baru dibuat'}
           </Text>
         </View>
-        <View style={[styles.statusBadge, item.isActive ? styles.statusActive : styles.statusInactive]}>
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={() => handleToggleStatus(item)}
+          style={[styles.statusBadge, item.isActive ? styles.statusActive : styles.statusInactive]}
+        >
           <Text style={[styles.statusText, item.isActive ? styles.statusActiveText : styles.statusInactiveText]}>
             {item.isActive ? 'Aktif' : 'Non-aktif'}
           </Text>
-        </View>
+        </TouchableOpacity>
       </View>
     );
   };
@@ -203,32 +265,42 @@ export default function PanitiaScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Banner: TODO gap #1 */}
-      <View style={styles.todoBanner}>
-        <Ionicons name="warning-outline" size={18} color="#F57F17" />
-        <Text style={styles.todoBannerText}>
-          Daftar lengkap panitia menunggu endpoint{' '}
-          <Text style={{ fontWeight: '700' }}>GET /auth/panitia</Text> dari backend.{'\n'}
-          Akun yang dibuat di sesi ini ditampilkan di bawah.
-        </Text>
-      </View>
+      {/* Banner: Tampil hanya jika terjadi error / backend gap */}
+      {loadError && (
+        <View style={styles.todoBanner}>
+          <Ionicons name="warning-outline" size={18} color="#F57F17" />
+          <Text style={styles.todoBannerText}>
+            Gagal memuat daftar panitia dari server atau endpoint belum siap.{'\n'}
+            Tarik ke bawah untuk memuat ulang.
+          </Text>
+        </View>
+      )}
 
       {/* List */}
-      <FlatList
-        data={panitiaList}
-        keyExtractor={(item) => item.id}
-        renderItem={renderPanitia}
-        contentContainerStyle={styles.listContent}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Ionicons name="person-add-outline" size={56} color="#BDBDBD" />
-            <Text style={styles.emptyTitle}>Belum ada akun panitia</Text>
-            <Text style={styles.emptySubtitle}>
-              Ketuk "Buat Akun" di atas untuk menambah panitia baru.
-            </Text>
-          </View>
-        }
-      />
+      {loading ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+      ) : (
+        <FlatList
+          data={panitiaList}
+          keyExtractor={(item) => item.id}
+          renderItem={renderPanitia}
+          contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Ionicons name="person-add-outline" size={56} color="#BDBDBD" />
+              <Text style={styles.emptyTitle}>Belum ada akun panitia</Text>
+              <Text style={styles.emptySubtitle}>
+                Ketuk "Buat Akun" di atas untuk menambah panitia baru.
+              </Text>
+            </View>
+          }
+        />
+      )}
 
       <CreatePanitiaModal
         visible={showModal}

@@ -74,12 +74,19 @@ export default function LoginScreen() {
       const currentUser = await refreshMe();
       setLoading(false);
 
+      // TEMP DEBUG — hapus setelah selesai debugging
+      console.log('[DEBUG login] currentUser =', JSON.stringify(currentUser, null, 2));
+
       if (currentUser) {
+        const userRole = String(currentUser.role || '').toUpperCase();
         if (currentUser.isEmailVerified === false) {
           router.replace({ pathname: '/verify-otp', params: { email: cleanEmail } });
-        } else if (currentUser.role === 'ADMIN_KESISWAAN') {
+        } else if (userRole === 'ADMIN_KESISWAAN') {
           // Admin: arahkan ke dashboard admin
           router.replace('/(admin)/dashboard');
+        } else if (userRole === 'PANITIA') {
+          // Panitia: arahkan ke dashboard panitia
+          router.replace('/(panitia)/dashboard');
         } else if (!currentUser.student) {
           router.replace('/complete-profile');
         } else {
@@ -213,7 +220,7 @@ export default function LoginScreen() {
             {errors.email ? (
               <View style={styles.errorRow}>
                 <Ionicons name="alert-circle-outline" size={14} color={Colors.error} />
-                  <Text style={styles.googleButtonText}>Masuk dengan Google</Text>
+                <Text style={styles.errorText}>{errors.email}</Text>
               </View>
             ) : null}
           </View>
