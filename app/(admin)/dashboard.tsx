@@ -17,11 +17,12 @@ import { router } from 'expo-router';
 import { Colors, Spacing, Radius } from '../../constants/theme';
 import { useAuth } from '../../context/AuthContext';
 import { getStudents } from '../../services/admin/students.service';
+import { getPanitia } from '../../services/admin/panitia.service';
 import api from '../../services/api';
 
 interface DashboardStats {
   totalSiswa: number | null;
-  panitiaAktif: number | null; // null = belum tersedia (TODO gap #1 & #2)
+  panitiaAktif: number | null;
   eventBerjalan: number | null;
 }
 
@@ -43,6 +44,15 @@ export default function AdminDashboardScreen() {
       const studentsRes = await getStudents(1, 1);
       const totalSiswa = studentsRes.meta.total;
 
+      // Panitia Aktif: fetch semua panitia, hitung yang isActive === true
+      let panitiaAktif = 0;
+      try {
+        const panitiaList = await getPanitia();
+        panitiaAktif = panitiaList.filter((p) => p.isActive).length;
+      } catch (e) {
+        console.warn('Error fetching panitia stats:', e);
+      }
+
       // Event Berjalan: fetch semua event, hitung yang ONGOING
       let eventBerjalan = 0;
       try {
@@ -53,7 +63,7 @@ export default function AdminDashboardScreen() {
 
       setStats({
         totalSiswa,
-        panitiaAktif: null, // TODO(backend gap #1 & #2): endpoint belum ada
+        panitiaAktif,
         eventBerjalan,
       });
     } catch (err) {
@@ -133,9 +143,6 @@ export default function AdminDashboardScreen() {
                 <Text style={styles.statValueMid}>
                   {stats.panitiaAktif !== null ? stats.panitiaAktif : '—'}
                 </Text>
-                {stats.panitiaAktif === null && (
-                  <Text style={styles.statPendingNote}>Menunggu endpoint backend</Text>
-                )}
               </View>
 
               {/* Event Berjalan */}

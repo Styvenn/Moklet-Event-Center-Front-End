@@ -243,6 +243,7 @@ export default function CompleteProfileScreen() {
       try {
         const res: any = await api.get('/students/bind-candidates');
         const rawList: RawCandidateStudent[] = Array.isArray(res) ? res : res?.data || [];
+        console.log('[DEBUG candidates] rawList =', JSON.stringify(rawList, null, 2));
         const list: CandidateStudent[] = rawList.map(normalizeCandidate).filter((student) => student.id && student.name);
 
         const uniqueCandidatesMap = new Map<string, CandidateStudent>();

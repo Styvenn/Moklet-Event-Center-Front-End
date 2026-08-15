@@ -1,5 +1,5 @@
 // app/daftar-lomba.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,47 +11,144 @@ import {
   Modal,
   Pressable,
   TextInput,
+  ActivityIndicator,
+  Alert,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Colors, Spacing, Radius } from '../constants/theme';
+import api from '../services/api';
+import {
+  getCategoriesByEvent,
+  getEventById,
+  CategoryItem,
+  EventItem,
+} from '../services/panitia/events.service';
+import {
+  registerIndividual,
+  createTeam,
+  joinTeam,
+} from '../services/registration.service';
 
-const MOKLET_CUP_BRANCHES = [
-  { id: '1', name: 'Basket (Putra)', type: 'Kelompok', minMax: 'Min. 4 anggota, Maks. 5 anggota', icon: 'basketball-outline' },
-  { id: '2', name: 'Futsal (Campuran)', type: 'Kelompok', minMax: 'Min. 5 anggota, Maks. 7 anggota', icon: 'football-outline' },
-  { id: '3', name: 'E-Sport Mobile Legends', type: 'Kelompok', minMax: 'Min. 5 anggota, Maks. 6 anggota', icon: 'game-controller-outline' },
-  { id: '4', name: 'Tarik Tambang', type: 'Kelompok', minMax: 'Min. 6 anggota, Maks. 8 anggota', icon: 'people-outline' },
-  { id: '5', name: 'Voli Campuran', type: 'Kelompok', minMax: 'Min. 6 anggota, Maks. 8 anggota', icon: 'fitness-outline' },
-];
-
-const EVENT_NAMES: Record<string, string> = {
-  '1': 'Moklet Cup 2024',
-  '2': 'Turnamen Basket Antar Sekolah',
-  '3': 'Lomba Robotik Nasional',
-  '4': 'Festival Seni Budaya Tahunan',
-};
-
-type Branch = (typeof MOKLET_CUP_BRANCHES)[0];
+function getCategoryIcon(name: string): any {
+  const lower = (name || '').toLowerCase();
+  if (lower.includes('futsal') || lower.includes('bola') || lower.includes('football')) return 'football-outline';
+  if (lower.includes('basket')) return 'basketball-outline';
+  if (lower.includes('esport') || lower.includes('e-sport') || lower.includes('game') || lower.includes('mobile')) return 'game-controller-outline';
+  if (lower.includes('tari') || lower.includes('musik') || lower.includes('seni') || lower.includes('band')) return 'musical-notes-outline';
+  if (lower.includes('robot') || lower.includes('it') || lower.includes('koding') || lower.includes('web')) return 'hardware-chip-outline';
+  if (lower.includes('voli')) return 'fitness-outline';
+  if (lower.includes('lari') || lower.includes('atletik')) return 'walk-outline';
+  if (lower.includes('tarik tambang')) return 'people-outline';
+  if (lower.includes('badminton') || lower.includes('bulutangkis')) return 'tennisball-outline';
+  return 'trophy-outline';
+}
 
 export default function DaftarLombaScreen() {
   const { eventId } = useLocalSearchParams<{ eventId?: string }>();
-  const currentEventId = eventId || '1';
-  const eventName = EVENT_NAMES[currentEventId] || 'Moklet Cup 2024';
+  const currentEventId = eventId || '';
 
-  const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null);
+  const [eventData, setEventData] = useState<EventItem | null>(null);
+  const [categories, setCategories] = useState<CategoryItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Modal States
+  const [selectedCategory, setSelectedCategory] = useState<CategoryItem | null>(null);
   const [showChoiceModal, setShowChoiceModal] = useState(false);
   const [showEnterCodeModal, setShowEnterCodeModal] = useState(false);
+  const [showCreateTeamModal, setShowCreateTeamModal] = useState(false);
+
+  // Form Inputs
   const [roomCodeInput, setRoomCodeInput] = useState('');
+  const [teamNameInput, setTeamNameInput] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [modalError, setModalError] = useState<string | null>(null);
 
-  const branches = currentEventId === '1' ? MOKLET_CUP_BRANCHES : [];
+  const loadData = useCallback(async (isRefresh = false) => {
+    if (!currentEventId) {
+      setErrorMsg('ID Event tidak valid.');
+      setLoading(false);
+      return;
+    }
 
-  const handleBranchClick = (branch: Branch) => {
-    setSelectedBranch(branch);
-    setShowChoiceModal(true);
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
+    setErrorMsg(null);
+
+    try {
+      const [ev, cats] = await Promise.all([
+        getEventById(currentEventId).catch(() => null),
+        getCategoriesByEvent(currentEventId).catch(() => []),
+      ]);
+      setEventData(ev);
+      setCategories(cats);
+    } catch (err: any) {
+      console.warn('Error loading categories:', err);
+      setErrorMsg(err?.formattedMessage || 'Gagal memuat cabang lomba.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [currentEventId]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const handleCategoryPress = (category: CategoryItem) => {
+    setSelectedCategory(category);
+    setModalError(null);
+
+    if (category.maxMember === 1) {
+      // Pendaftaran Individu
+      Alert.alert(
+        'Daftar Lomba Individu',
+        `Apakah Anda yakin ingin mendaftar ke cabang lomba "${category.name}"?`,
+        [
+          { text: 'Batal', style: 'cancel' },
+          {
+            text: 'Daftar Sekarang',
+            onPress: () => handleIndividualRegistration(category.id),
+          },
+        ]
+      );
+    } else {
+      // Pendaftaran Kelompok/Tim
+      setShowChoiceModal(true);
+    }
+  };
+
+  const handleIndividualRegistration = async (categoryId: string) => {
+    setLoading(true);
+    try {
+      await registerIndividual(categoryId);
+      Alert.alert(
+        'Pendaftaran Berhasil!',
+        'Anda telah berhasil mendaftar ke cabang lomba ini.',
+        [
+          {
+            text: 'Lihat Riwayat',
+            onPress: () => router.replace('/(tabs)/history'),
+          },
+        ]
+      );
+    } catch (err: any) {
+      Alert.alert(
+        'Pendaftaran Gagal',
+        err?.formattedMessage || err?.message || 'Gagal melakukan pendaftaran. Silakan coba lagi.'
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handlePressEnterCode = () => {
     setShowChoiceModal(false);
+    setRoomCodeInput('');
+    setModalError(null);
     setTimeout(() => {
       setShowEnterCodeModal(true);
     }, 200);
@@ -59,13 +156,70 @@ export default function DaftarLombaScreen() {
 
   const handlePressCreateRoom = () => {
     setShowChoiceModal(false);
-    router.push({ pathname: '/room-tim', params: { mode: 'create' } });
+    setTeamNameInput('');
+    setModalError(null);
+    setTimeout(() => {
+      setShowCreateTeamModal(true);
+    }, 200);
   };
 
-  const handleGabungRoom = () => {
-    setShowEnterCodeModal(false);
-    router.push({ pathname: '/room-tim', params: { mode: 'join' } });
+  const handleJoinTeamSubmit = async () => {
+    const cleanCode = roomCodeInput.trim();
+    if (!cleanCode) {
+      setModalError('Kode room wajib diisi.');
+      return;
+    }
+
+    setSubmitting(true);
+    setModalError(null);
+
+    try {
+      const team = await joinTeam(cleanCode);
+      setShowEnterCodeModal(false);
+      Alert.alert('Berhasil Bergabung!', `Kamu telah bergabung dengan tim ${team.name}.`, [
+        {
+          text: 'Masuk ke Room Tim',
+          onPress: () => router.push({ pathname: '/room-tim', params: { teamId: team.id } }),
+        },
+      ]);
+    } catch (err: any) {
+      setModalError(err?.formattedMessage || err?.message || 'Kode room tidak ditemukan atau kuota penuh.');
+    } finally {
+      setSubmitting(false);
+    }
   };
+
+  const handleCreateTeamSubmit = async () => {
+    const cleanName = teamNameInput.trim();
+    if (!cleanName || cleanName.length < 3) {
+      setModalError('Nama tim minimal 3 karakter.');
+      return;
+    }
+    if (!selectedCategory) {
+      setModalError('Cabang lomba tidak valid.');
+      return;
+    }
+
+    setSubmitting(true);
+    setModalError(null);
+
+    try {
+      const team = await createTeam(cleanName, selectedCategory.id);
+      setShowCreateTeamModal(false);
+      Alert.alert('Room Tim Dibuat!', `Tim "${team.name}" berhasil dibuat. Kode tim: ${team.code}`, [
+        {
+          text: 'Masuk ke Room Tim',
+          onPress: () => router.push({ pathname: '/room-tim', params: { teamId: team.id } }),
+        },
+      ]);
+    } catch (err: any) {
+      setModalError(err?.formattedMessage || err?.message || 'Gagal membuat room tim.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const eventName = eventData?.name || 'Moklet Event';
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -78,45 +232,82 @@ export default function DaftarLombaScreen() {
         >
           <Ionicons name="arrow-back" size={22} color={Colors.textMain} />
         </TouchableOpacity>
-        <View style={{ alignItems: 'center' }}>
-          <Text style={styles.headerTitle}>Daftar Lomba</Text>
-          <Text style={styles.headerSub}>{eventName}</Text>
+        <View style={{ alignItems: 'center', flex: 1, paddingHorizontal: 8 }}>
+          <Text style={styles.headerTitle} numberOfLines={1}>Daftar Lomba</Text>
+          <Text style={styles.headerSub} numberOfLines={1}>{eventName}</Text>
         </View>
         <View style={{ width: 40 }} />
       </View>
 
-      {branches.length > 0 ? (
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.list}>
-          {branches.map((branch, index) => (
-            <View key={branch.id}>
-              <TouchableOpacity
-                style={styles.branchItem}
-                activeOpacity={0.7}
-                onPress={() => handleBranchClick(branch)}
-              >
-                <View style={styles.branchLeft}>
-                  <View style={styles.branchIcon}>
-                    <Ionicons name={branch.icon as any} size={20} color={Colors.primary} />
-                  </View>
-                  <View>
-                    <Text style={styles.branchName}>{branch.name}</Text>
-                    <View style={styles.typeRow}>
-                      <Ionicons name="people-outline" size={12} color={Colors.textSubtitle} />
-                      <Text style={styles.branchType}>{branch.type}</Text>
+      {loading ? (
+        <View style={styles.centerBox}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={styles.loadingText}>Memuat cabang lomba...</Text>
+        </View>
+      ) : categories.length > 0 ? (
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.list}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => loadData(true)}
+              colors={[Colors.primary]}
+            />
+          }
+        >
+          {errorMsg ? (
+            <View style={styles.errorBox}>
+              <Ionicons name="alert-circle-outline" size={18} color={Colors.error} />
+              <Text style={styles.errorText}>{errorMsg}</Text>
+            </View>
+          ) : null}
+
+          {categories.map((branch, index) => {
+            const isIndividual = branch.maxMember === 1;
+            const memberLabel = isIndividual
+              ? 'Individu (1 orang)'
+              : `Kelompok (${branch.minMember} - ${branch.maxMember} anggota)`;
+
+            return (
+              <View key={branch.id}>
+                <TouchableOpacity
+                  style={styles.branchItem}
+                  activeOpacity={0.7}
+                  onPress={() => handleCategoryPress(branch)}
+                >
+                  <View style={styles.branchLeft}>
+                    <View style={styles.branchIcon}>
+                      <Ionicons
+                        name={getCategoryIcon(branch.name)}
+                        size={20}
+                        color={Colors.primary}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.branchName}>{branch.name}</Text>
+                      <View style={styles.typeRow}>
+                        <Ionicons
+                          name={isIndividual ? 'person-outline' : 'people-outline'}
+                          size={12}
+                          color={Colors.textSubtitle}
+                        />
+                        <Text style={styles.branchType}>{memberLabel}</Text>
+                      </View>
                     </View>
                   </View>
-                </View>
-                <TouchableOpacity
-                  style={styles.daftarBtn}
-                  onPress={() => handleBranchClick(branch)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.daftarBtnText}>Daftar</Text>
+                  <TouchableOpacity
+                    style={styles.daftarBtn}
+                    onPress={() => handleCategoryPress(branch)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.daftarBtnText}>Daftar</Text>
+                  </TouchableOpacity>
                 </TouchableOpacity>
-              </TouchableOpacity>
-              {index < branches.length - 1 && <View style={styles.divider} />}
-            </View>
-          ))}
+                {index < categories.length - 1 && <View style={styles.divider} />}
+              </View>
+            );
+          })}
         </ScrollView>
       ) : (
         <View style={styles.emptyStateContainer}>
@@ -139,9 +330,9 @@ export default function DaftarLombaScreen() {
       >
         <Pressable style={styles.overlay} onPress={() => setShowChoiceModal(false)}>
           <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
-            <Text style={styles.choiceTitle}>{selectedBranch?.name || 'Basket (Putra)'}</Text>
+            <Text style={styles.choiceTitle}>{selectedCategory?.name || 'Cabang Lomba'}</Text>
             <Text style={styles.choiceSubtitle}>
-              {selectedBranch?.minMax || 'Min. 4 anggota, Maks. 5 anggota'}
+              Min. {selectedCategory?.minMember} anggota, Maks. {selectedCategory?.maxMember} anggota
             </Text>
 
             {/* Side-by-Side Action Buttons */}
@@ -180,38 +371,119 @@ export default function DaftarLombaScreen() {
         visible={showEnterCodeModal}
         transparent
         animationType="fade"
-        onRequestClose={() => setShowEnterCodeModal(false)}
+        onRequestClose={() => !submitting && setShowEnterCodeModal(false)}
       >
-        <Pressable style={styles.overlay} onPress={() => setShowEnterCodeModal(false)}>
+        <Pressable
+          style={styles.overlay}
+          onPress={() => !submitting && setShowEnterCodeModal(false)}
+        >
           <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
             <Text style={styles.enterCodeTitle}>Masukkan Kode Room</Text>
             <Text style={styles.enterCodeDesc}>
-              Masukkan 6 digit kode yang diberikan oleh pembuat room.
+              Masukkan kode tim yang diberikan oleh ketua tim (leader).
             </Text>
+
+            {modalError ? (
+              <View style={styles.modalErrorBox}>
+                <Ionicons name="alert-circle-outline" size={16} color={Colors.error} />
+                <Text style={styles.modalErrorText}>{modalError}</Text>
+              </View>
+            ) : null}
 
             <TextInput
               style={styles.codeInputBox}
-              placeholder="000000"
+              placeholder="KODE TIM"
               placeholderTextColor="#94A3B8"
               value={roomCodeInput}
-              onChangeText={setRoomCodeInput}
-              keyboardType="number-pad"
-              maxLength={6}
+              onChangeText={(t) => {
+                setRoomCodeInput(t);
+                if (modalError) setModalError(null);
+              }}
+              autoCapitalize="characters"
               autoFocus
+              editable={!submitting}
             />
 
             <TouchableOpacity
-              style={styles.gabungRoomBtn}
+              style={[styles.gabungRoomBtn, (!roomCodeInput.trim() || submitting) && { opacity: 0.6 }]}
               activeOpacity={0.85}
-              onPress={handleGabungRoom}
+              onPress={handleJoinTeamSubmit}
+              disabled={!roomCodeInput.trim() || submitting}
             >
-              <Text style={styles.gabungRoomText}>Gabung Room</Text>
+              {submitting ? (
+                <ActivityIndicator color={Colors.white} size="small" />
+              ) : (
+                <Text style={styles.gabungRoomText}>Gabung Room</Text>
+              )}
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.cancelFullBtn}
               activeOpacity={0.8}
               onPress={() => setShowEnterCodeModal(false)}
+              disabled={submitting}
+            >
+              <Text style={styles.cancelFullText}>Batal</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* MODAL 3: Create Team Modal (Buat Tim Baru) */}
+      <Modal
+        visible={showCreateTeamModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !submitting && setShowCreateTeamModal(false)}
+      >
+        <Pressable
+          style={styles.overlay}
+          onPress={() => !submitting && setShowCreateTeamModal(false)}
+        >
+          <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
+            <Text style={styles.enterCodeTitle}>Buat Room Tim</Text>
+            <Text style={styles.enterCodeDesc}>
+              Masukkan nama tim untuk cabang lomba "{selectedCategory?.name}". Anda otomatis menjadi Leader tim.
+            </Text>
+
+            {modalError ? (
+              <View style={styles.modalErrorBox}>
+                <Ionicons name="alert-circle-outline" size={16} color={Colors.error} />
+                <Text style={styles.modalErrorText}>{modalError}</Text>
+              </View>
+            ) : null}
+
+            <TextInput
+              style={[styles.codeInputBox, { letterSpacing: 0, fontSize: 16, textAlign: 'left', paddingHorizontal: 16 }]}
+              placeholder="Contoh: Tim Garuda Moklet"
+              placeholderTextColor="#94A3B8"
+              value={teamNameInput}
+              onChangeText={(t) => {
+                setTeamNameInput(t);
+                if (modalError) setModalError(null);
+              }}
+              autoFocus
+              editable={!submitting}
+            />
+
+            <TouchableOpacity
+              style={[styles.gabungRoomBtn, (!teamNameInput.trim() || submitting) && { opacity: 0.6 }]}
+              activeOpacity={0.85}
+              onPress={handleCreateTeamSubmit}
+              disabled={!teamNameInput.trim() || submitting}
+            >
+              {submitting ? (
+                <ActivityIndicator color={Colors.white} size="small" />
+              ) : (
+                <Text style={styles.gabungRoomText}>Buat Tim Sekarang</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.cancelFullBtn}
+              activeOpacity={0.8}
+              onPress={() => setShowCreateTeamModal(false)}
+              disabled={submitting}
             >
               <Text style={styles.cancelFullText}>Batal</Text>
             </TouchableOpacity>
@@ -272,6 +544,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.md,
     flex: 1,
+    paddingRight: 8,
   },
   branchIcon: {
     width: 40,
@@ -311,6 +584,32 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#F0F0F0',
     marginHorizontal: Spacing.base,
+  },
+
+  // States
+  centerBox: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: Colors.textSubtitle,
+  },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FFEBEE',
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  errorText: {
+    flex: 1,
+    color: Colors.error,
+    fontSize: 13,
   },
 
   // Empty state
@@ -394,7 +693,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: '#B81414',
+    borderColor: Colors.primary,
     backgroundColor: Colors.white,
     alignItems: 'center',
     justifyContent: 'center',
@@ -402,7 +701,7 @@ const styles = StyleSheet.create({
   enterCodeOutlineText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#B81414',
+    color: Colors.primary,
     textAlign: 'center',
     lineHeight: 18,
   },
@@ -411,7 +710,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 8,
     borderRadius: 14,
-    backgroundColor: '#B81414',
+    backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -448,8 +747,23 @@ const styles = StyleSheet.create({
     color: Colors.textSubtitle,
     textAlign: 'center',
     lineHeight: 20,
-    marginBottom: Spacing.xl,
+    marginBottom: Spacing.lg,
     paddingHorizontal: Spacing.sm,
+  },
+  modalErrorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FFEBEE',
+    borderRadius: Radius.md,
+    padding: Spacing.sm,
+    marginBottom: Spacing.md,
+    width: '100%',
+  },
+  modalErrorText: {
+    color: Colors.error,
+    fontSize: 12,
+    flex: 1,
   },
   codeInputBox: {
     width: '100%',
@@ -467,7 +781,7 @@ const styles = StyleSheet.create({
     width: '100%',
     paddingVertical: 14,
     borderRadius: 14,
-    backgroundColor: '#B81414',
+    backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Spacing.md,

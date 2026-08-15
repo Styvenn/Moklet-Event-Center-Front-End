@@ -35,6 +35,11 @@ export default function GoogleOAuthScreen() {
       return;
     }
 
+    if (currentUser?.role === 'PANITIA') {
+      router.replace('/(panitia)/dashboard');
+      return;
+    }
+
     if (!currentUser?.student) {
       router.replace('/complete-profile');
       return;
