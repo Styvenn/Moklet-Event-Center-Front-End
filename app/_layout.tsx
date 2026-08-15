@@ -23,6 +23,7 @@ export default function RootLayout() {
         <Stack.Screen name="google-oauth" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(admin)" />
+        <Stack.Screen name="(panitia)" />
         <Stack.Screen name="event-detail" />
         <Stack.Screen name="daftar-lomba" />
         <Stack.Screen name="room-tim" />

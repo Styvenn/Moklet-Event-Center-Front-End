@@ -1,0 +1,282 @@
+﻿// app/(panitia)/events/create.tsx
+import React, { useState } from "react";
+import {
+  View, Text, StyleSheet, SafeAreaView, Platform, ScrollView,
+  TextInput, TouchableOpacity, ActivityIndicator, Image, Alert, KeyboardAvoidingView,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
+import * as ImagePicker from "expo-image-picker";
+import * as DocumentPicker from "expo-document-picker";
+import { Colors, Spacing, Radius } from "../../../constants/theme";
+import { createEvent, uploadBanner, uploadGuidebook } from "../../../services/panitia/events.service";
+
+export default function CreateEventScreen() {
+  const [name, setName] = useState("");
+  const [eventDate, setEventDate] = useState("");
+  const [description, setDescription] = useState("");
+  const [bannerUri, setBannerUri] = useState<string | null>(null);
+  const [guidebookUri, setGuidebookUri] = useState<string | null>(null);
+  const [guidebookName, setGuidebookName] = useState<string | null>(null);
+
+  const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<{ name?: string; eventDate?: string; general?: string }>({});
+
+  const pickBanner = async () => {
+    try {
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.8,
+      });
+      if (!res.canceled && res.assets && res.assets[0]) {
+        setBannerUri(res.assets[0].uri);
+      }
+    } catch {
+      Alert.alert("Error", "Gagal memilih gambar banner.");
+    }
+  };
+
+  const pickGuidebook = async () => {
+    try {
+      const res = await DocumentPicker.getDocumentAsync({
+        type: "application/pdf",
+        copyToCacheDirectory: true,
+      });
+      if (!res.canceled && res.assets && res.assets[0]) {
+        setGuidebookUri(res.assets[0].uri);
+        setGuidebookName(res.assets[0].name || "guidebook.pdf");
+      }
+    } catch {
+      Alert.alert("Error", "Gagal memilih berkas PDF.");
+    }
+  };
+
+  const validate = () => {
+    const errs: typeof errors = {};
+    if (!name.trim()) errs.name = "Nama event wajib diisi.";
+    if (!eventDate.trim()) {
+      errs.eventDate = "Tanggal event wajib diisi (YYYY-MM-DD).";
+    } else if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate.trim())) {
+      errs.eventDate = "Format tanggal harus YYYY-MM-DD (contoh: 2026-08-17).";
+    }
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const handleSubmit = async () => {
+    if (!validate()) return;
+    setLoading(true);
+    setErrors({});
+
+    try {
+      const created = await createEvent({
+        name: name.trim(),
+        eventDate: eventDate.trim(),
+        description: description.trim() || undefined,
+      });
+
+      // Upload banner jika ada
+      if (bannerUri && created.id) {
+        try {
+          await uploadBanner(created.id, bannerUri);
+        } catch (e: any) {
+          console.warn("Banner upload error:", e);
+        }
+      }
+
+      // Upload guidebook jika ada
+      if (guidebookUri && created.id) {
+        try {
+          await uploadGuidebook(created.id, guidebookUri);
+        } catch (e: any) {
+          console.warn("Guidebook upload error:", e);
+        }
+      }
+
+      setLoading(false);
+      Alert.alert("Sukses", "Event baru berhasil dibuat!", [
+        { text: "OK", onPress: () => router.replace({ pathname: "/(panitia)/events/[id]", params: { id: created.id } } as any) }
+      ]);
+    } catch (e: any) {
+      setLoading(false);
+      setErrors({ general: e?.formattedMessage || e?.message || "Gagal membuat event. Coba lagi." });
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.safe}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <Ionicons name="arrow-back" size={24} color="#1E1E1E" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Buat Event Baru</Text>
+          <View style={{ width: 38 }} />
+        </View>
+
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+          {errors.general ? (
+            <View style={styles.errorBox}>
+              <Ionicons name="alert-circle-outline" size={18} color={Colors.primary} />
+              <Text style={styles.errorText}>{errors.general}</Text>
+            </View>
+          ) : null}
+
+          {/* Nama Event */}
+          <Text style={styles.label}>Nama Event *</Text>
+          <TextInput
+            style={[styles.input, errors.name ? styles.inputError : null]}
+            placeholder="Contoh: Porseni Moklet 2026"
+            placeholderTextColor="#9E9E9E"
+            value={name}
+            onChangeText={(t) => { setName(t); setErrors((e) => ({ ...e, name: undefined })); }}
+          />
+          {errors.name && <Text style={styles.errHint}>{errors.name}</Text>}
+
+          {/* Tanggal Event */}
+          <Text style={styles.label}>Tanggal Event (YYYY-MM-DD) *</Text>
+          <View style={styles.dateInputWrapper}>
+            <TextInput
+              style={[styles.input, { flex: 1 }, errors.eventDate ? styles.inputError : null]}
+              placeholder="YYYY-MM-DD (Contoh: 2026-08-17)"
+              placeholderTextColor="#9E9E9E"
+              value={eventDate}
+              onChangeText={(t) => { setEventDate(t); setErrors((e) => ({ ...e, eventDate: undefined })); }}
+            />
+            <Ionicons name="calendar-outline" size={20} color="#9E9E9E" style={{ marginLeft: -36, marginRight: 12 }} />
+          </View>
+          {errors.eventDate && <Text style={styles.errHint}>{errors.eventDate}</Text>}
+
+          {/* Deskripsi */}
+          <Text style={styles.label}>Deskripsi Event</Text>
+          <TextInput
+            style={[styles.input, styles.textArea]}
+            placeholder="Jelaskan detail acara, syarat, atau informasi penting lainnya..."
+            placeholderTextColor="#9E9E9E"
+            multiline
+            numberOfLines={4}
+            textAlignVertical="top"
+            value={description}
+            onChangeText={setDescription}
+          />
+
+          {/* Upload Banner */}
+          <Text style={styles.label}>Banner Event</Text>
+          <TouchableOpacity style={styles.uploadCard} onPress={pickBanner} activeOpacity={0.8}>
+            {bannerUri ? (
+              <View style={styles.bannerPreviewWrapper}>
+                <Image source={{ uri: bannerUri }} style={styles.bannerPreview} />
+                <View style={styles.changeOverlay}>
+                  <Ionicons name="camera-outline" size={20} color="#fff" />
+                  <Text style={styles.changeText}>Ganti Banner</Text>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.uploadPlaceholder}>
+                <View style={styles.uploadIconCircle}>
+                  <Ionicons name="image-outline" size={24} color={Colors.primary} />
+                </View>
+                <Text style={styles.uploadTitle}>Upload Banner</Text>
+                <Text style={styles.uploadSub}>PNG, JPG, atau WEBP (Maks 3MB)</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          {/* Upload Guidebook */}
+          <Text style={styles.label}>Guidebook / Buku Panduan (PDF)</Text>
+          <TouchableOpacity style={styles.pdfCard} onPress={pickGuidebook} activeOpacity={0.8}>
+            <Ionicons name="document-text-outline" size={24} color={Colors.primary} />
+            <Text style={styles.pdfName} numberOfLines={1}>
+              {guidebookName || "Pilih file PDF (Maks 10MB)..."}
+            </Text>
+            <Text style={styles.pdfUploadBtn}>{guidebookUri ? "Ganti" : "Upload"}</Text>
+          </TouchableOpacity>
+
+          <View style={{ height: 32 }} />
+        </ScrollView>
+
+        {/* Sticky Submit Button */}
+        <View style={styles.bottomBar}>
+          <TouchableOpacity
+            style={[styles.submitBtn, loading && styles.submitBtnDisabled]}
+            onPress={handleSubmit}
+            disabled={loading}
+            activeOpacity={0.85}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Text style={styles.submitBtnText}>Simpan Event</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: "#fff", paddingTop: Platform.OS === "android" ? 36 : 0 },
+  header: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingHorizontal: Spacing.base, paddingVertical: 12,
+    borderBottomWidth: 1, borderBottomColor: "#F0F0F0",
+  },
+  backBtn: { width: 38, height: 38, alignItems: "center", justifyContent: "center" },
+  headerTitle: { fontSize: 18, fontWeight: "800", color: "#1E1E1E" },
+  scroll: { padding: Spacing.base, paddingBottom: 40 },
+  errorBox: {
+    flexDirection: "row", gap: 8, backgroundColor: "#FFEBEE", borderRadius: Radius.lg,
+    padding: Spacing.md, marginBottom: Spacing.base, alignItems: "center",
+  },
+  errorText: { flex: 1, fontSize: 13, color: Colors.primary },
+  label: { fontSize: 13, fontWeight: "600", color: "#424242", marginTop: Spacing.md, marginBottom: 6 },
+  input: {
+    backgroundColor: "#F5F5F5", borderRadius: Radius.lg,
+    paddingHorizontal: Spacing.md, paddingVertical: Platform.OS === "ios" ? 14 : 10,
+    fontSize: 14, color: "#1E1E1E", borderWidth: 1, borderColor: "transparent",
+  },
+  inputError: { borderColor: Colors.primary, backgroundColor: "#FFF8F8" },
+  errHint: { fontSize: 12, color: Colors.primary, marginTop: 4, marginLeft: 4 },
+  dateInputWrapper: { flexDirection: "row", alignItems: "center" },
+  textArea: { minHeight: 100, paddingTop: 12 },
+  uploadCard: {
+    borderWidth: 1.5, borderColor: "#E0E0E0", borderStyle: "dashed",
+    borderRadius: Radius.xl, overflow: "hidden", backgroundColor: "#FAFAFA",
+    minHeight: 130, justifyContent: "center", alignItems: "center",
+  },
+  uploadPlaceholder: { alignItems: "center", padding: Spacing.md, gap: 6 },
+  uploadIconCircle: {
+    width: 44, height: 44, borderRadius: 22, backgroundColor: "#FFEBEE",
+    alignItems: "center", justifyContent: "center",
+  },
+  uploadTitle: { fontSize: 14, fontWeight: "700", color: Colors.primary },
+  uploadSub: { fontSize: 12, color: "#9E9E9E" },
+  bannerPreviewWrapper: { width: "100%", height: 160, position: "relative" },
+  bannerPreview: { width: "100%", height: "100%" },
+  changeOverlay: {
+    position: "absolute", bottom: 0, left: 0, right: 0,
+    backgroundColor: "rgba(0,0,0,0.6)", paddingVertical: 8,
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
+  },
+  changeText: { color: "#fff", fontSize: 12, fontWeight: "600" },
+  pdfCard: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    backgroundColor: "#F5F5F5", borderRadius: Radius.lg, padding: Spacing.md,
+    borderWidth: 1, borderColor: "#E0E0E0",
+  },
+  pdfName: { flex: 1, fontSize: 13, color: "#424242" },
+  pdfUploadBtn: { fontSize: 13, fontWeight: "700", color: Colors.primary },
+  bottomBar: {
+    padding: Spacing.base, backgroundColor: "#fff",
+    borderTopWidth: 1, borderTopColor: "#F0F0F0",
+    paddingBottom: Platform.OS === "ios" ? 28 : Spacing.base,
+  },
+  submitBtn: {
+    backgroundColor: Colors.primary, borderRadius: Radius.lg,
+    height: 50, alignItems: "center", justifyContent: "center",
+  },
+  submitBtnDisabled: { opacity: 0.6 },
+  submitBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
+});
