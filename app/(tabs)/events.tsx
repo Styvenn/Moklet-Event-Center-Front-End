@@ -1,5 +1,5 @@
 // app/(tabs)/events.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -14,82 +14,101 @@ import {
   RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Colors, Spacing, Radius } from '../../constants/theme';
+import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
+import {
+  getManagedEventsForStudent,
+  EventItem,
+} from '../../services/panitia/events.service';
 
-export interface EventItem {
-  id: string;
-  name: string;
-  description?: string;
-  eventDate: string;
-  status?: string;
-  bannerUrl?: string;
+function formatDate(dateStr?: string) {
+  if (!dateStr) return '-';
+  try {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('id-ID', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+  } catch (e) {
+    return dateStr;
+  }
 }
 
 export default function EventsScreen() {
+  const { user } = useAuth();
   const [events, setEvents] = useState<EventItem[]>([]);
+  const [managedEventIds, setManagedEventIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchEvents = async () => {
+  const fetchEvents = useCallback(async () => {
     try {
-      const res: any = await api.get('/events');
-      const list = Array.isArray(res) ? res : res?.data || [];
-      setEvents(list);
+      const [allRes, managedRes] = await Promise.allSettled([
+        api.get('/events'),
+        getManagedEventsForStudent(user?.student?.id, user?.id),
+      ]);
+
+      if (allRes.status === 'fulfilled') {
+        const raw = allRes.value;
+        const list = Array.isArray(raw) ? raw : (raw as any)?.data || [];
+        setEvents(list);
+      }
+
+      if (managedRes.status === 'fulfilled') {
+        const ids = new Set(managedRes.value.map((e) => e.id));
+        setManagedEventIds(ids);
+      }
     } catch (err) {
       console.warn('Error fetching events:', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [user?.student?.id, user?.id]);
 
-  useEffect(() => {
-    fetchEvents();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
+      fetchEvents();
+    }, [fetchEvents])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);
     fetchEvents();
   };
 
-  const filtered = events.filter((e) =>
-    e.name.toLowerCase().includes(search.toLowerCase())
+  const filtered = events.filter(
+    (e) =>
+      e.name.toLowerCase().includes(search.toLowerCase()) ||
+      (e.description && e.description.toLowerCase().includes(search.toLowerCase()))
   );
-
-  const formatDate = (dateStr?: string) => {
-    if (!dateStr) return '-';
-    try {
-      const d = new Date(dateStr);
-      return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
-    } catch (e) {
-      return dateStr;
-    }
-  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* Header */}
+      {/* Header (Screenshot 3) */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Semua Event</Text>
       </View>
 
-      {/* Search */}
+      {/* Search Bar (Screenshot 3) */}
       <View style={styles.searchRow}>
         <View style={styles.searchBox}>
-          <Ionicons name="search-outline" size={18} color={Colors.textPlaceholder} />
+          <Ionicons name="search-outline" size={18} color="#9E9E9E" />
           <TextInput
             style={styles.searchInput}
-            placeholder="Cari nama event..."
-            placeholderTextColor={Colors.textPlaceholder}
+            placeholder="Cari event..."
+            placeholderTextColor="#9E9E9E"
             value={search}
             onChangeText={setSearch}
           />
           {search ? (
             <TouchableOpacity onPress={() => setSearch('')}>
-              <Ionicons name="close-circle" size={18} color={Colors.textPlaceholder} />
+              <Ionicons name="close-circle" size={18} color="#9E9E9E" />
             </TouchableOpacity>
           ) : null}
         </View>
@@ -99,74 +118,97 @@ export default function EventsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.list}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[Colors.primary]}
+          />
         }
       >
         {loading ? (
-          <View style={styles.loaderContainer}>
+          <View style={styles.centerBox}>
             <ActivityIndicator size="large" color={Colors.primary} />
-            <Text style={styles.loaderText}>Memuat daftar event...</Text>
           </View>
         ) : filtered.length > 0 ? (
-          filtered.map((event) => {
-            const isClosed = event.status === 'CLOSED';
+          filtered.map((item) => {
+            const isManaged = managedEventIds.has(item.id) || user?.role === 'PANITIA';
+            const isOngoing = item.status === 'ONGOING';
+
             return (
-              <TouchableOpacity
-                key={event.id}
-                style={styles.card}
-                activeOpacity={0.9}
-                onPress={() => router.push({ pathname: '/event-detail', params: { eventId: event.id } })}
-              >
-                {/* Image */}
-                <View style={styles.imageContainer}>
+              <View key={item.id} style={styles.card}>
+                {/* Banner with Badge */}
+                <View style={styles.bannerWrapper}>
                   <Image
                     source={{
                       uri:
-                        event.bannerUrl ||
-                        'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=800&q=80',
+                        item.bannerUrl ||
+                        'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800&q=80',
                     }}
-                    style={styles.eventImage}
+                    style={styles.banner}
                   />
-                  {event.status ? (
-                    <View
-                      style={[
-                        styles.newBadge,
-                        { backgroundColor: isClosed ? '#757575' : Colors.primary },
-                      ]}
-                    >
-                      <Text style={styles.newBadgeText}>{event.status}</Text>
+                  {isOngoing && (
+                    <View style={styles.baruBadge}>
+                      <Text style={styles.baruBadgeText}>Baru</Text>
                     </View>
-                  ) : null}
+                  )}
                 </View>
 
-                {/* Body */}
+                {/* Content */}
                 <View style={styles.cardBody}>
-                  <View style={styles.cardTop}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.cardTitle}>{event.name}</Text>
-                      <View style={styles.dateRow}>
-                        <Ionicons name="calendar-outline" size={13} color={Colors.textSubtitle} />
-                        <Text style={styles.dateText}>{formatDate(event.eventDate)}</Text>
-                      </View>
-                    </View>
-                    <TouchableOpacity
-                      style={[styles.registerBtn, isClosed && styles.closedBtn]}
-                      activeOpacity={0.8}
-                      onPress={() => router.push({ pathname: '/event-detail', params: { eventId: event.id } })}
-                    >
-                      <Text style={styles.registerBtnText}>{isClosed ? 'Detail' : 'Daftar'}</Text>
-                    </TouchableOpacity>
+                  <Text style={styles.cardName} numberOfLines={2}>
+                    {item.name}
+                  </Text>
+                  <View style={styles.cardMeta}>
+                    <Ionicons name="calendar-outline" size={13} color="#757575" />
+                    <Text style={styles.cardDate}>{formatDate(item.eventDate)}</Text>
+                  </View>
+
+                  <View style={styles.cardActionRow}>
+                    {isManaged ? (
+                      /* If committee member -> Kelola Button (Screenshot 3) */
+                      <TouchableOpacity
+                        style={styles.kelolaBtn}
+                        activeOpacity={0.85}
+                        onPress={() =>
+                          router.push({
+                            pathname: '/(panitia)/events/[id]',
+                            params: { id: item.id },
+                          } as any)
+                        }
+                      >
+                        <Text style={styles.kelolaBtnText}>Kelola</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      /* Regular Student -> Lihat Detail / Daftar */
+                      <TouchableOpacity
+                        style={styles.detailBtn}
+                        activeOpacity={0.85}
+                        onPress={() =>
+                          router.push({
+                            pathname: '/event-detail',
+                            params: { eventId: item.id },
+                          })
+                        }
+                      >
+                        <Text style={styles.detailBtnText}>Lihat Detail</Text>
+                        <Ionicons name="chevron-forward" size={16} color="#B81414" />
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </View>
-              </TouchableOpacity>
+              </View>
             );
           })
         ) : (
-          <View style={styles.emptyContainer}>
-            <Ionicons name="calendar-clear-outline" size={48} color={Colors.textSubtitle} />
-            <Text style={styles.emptyTitle}>Tidak ada event ditemukan</Text>
-            <Text style={styles.emptySubtitle}>
-              {search ? 'Coba cari dengan kata kunci lain.' : 'Belum ada event yang dipublikasikan.'}
+          <View style={styles.centerBox}>
+            <Ionicons name="calendar-outline" size={48} color="#BDBDBD" />
+            <Text style={styles.emptyTitle}>
+              {search ? 'Event tidak ditemukan' : 'Belum ada event'}
+            </Text>
+            <Text style={styles.emptySub}>
+              {search
+                ? 'Coba gunakan kata kunci pencarian lain.'
+                : 'Event yang akan datang akan muncul di sini.'}
             </Text>
           </View>
         )}
@@ -178,137 +220,140 @@ export default function EventsScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F5F5F7',
+    backgroundColor: '#F5F7FA',
     paddingTop: Platform.OS === 'android' ? 36 : 0,
   },
   header: {
-    backgroundColor: Colors.white,
-    paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.base,
-    paddingBottom: Spacing.md,
+    backgroundColor: '#fff',
+    paddingHorizontal: Spacing.base,
+    paddingVertical: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
   },
   headerTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
-    color: Colors.primary,
-    textAlign: 'center',
+    color: '#B81414',
   },
   searchRow: {
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.md,
-    backgroundColor: Colors.white,
+    backgroundColor: '#fff',
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
   },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5F7',
+    backgroundColor: '#F8FAFC',
     borderRadius: Radius.lg,
     paddingHorizontal: Spacing.md,
     height: 44,
     gap: Spacing.sm,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   searchInput: {
     flex: 1,
     fontSize: 14,
-    color: Colors.textMain,
+    color: '#1E1E1E',
   },
   list: {
-    padding: Spacing.xl,
+    padding: Spacing.base,
+    paddingBottom: 32,
     gap: Spacing.base,
   },
-  loaderContainer: {
-    paddingVertical: 50,
-    alignItems: 'center',
-    gap: 12,
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: Radius.xl,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+    overflow: 'hidden',
   },
-  loaderText: {
-    fontSize: 14,
-    color: Colors.textSubtitle,
+  bannerWrapper: {
+    width: '100%',
+    height: 160,
+    position: 'relative',
   },
-  emptyContainer: {
-    paddingVertical: 60,
+  banner: {
+    width: '100%',
+    height: '100%',
+  },
+  baruBadge: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    backgroundColor: 'rgba(220, 252, 231, 0.95)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: Radius.round,
+  },
+  baruBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#166534',
+  },
+  cardBody: {
+    padding: Spacing.base,
+    gap: 6,
+  },
+  cardName: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#1E1E1E',
+  },
+  cardMeta: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 5,
+    marginBottom: 4,
+  },
+  cardDate: {
+    fontSize: 13,
+    color: '#757575',
+  },
+  cardActionRow: {
+    alignItems: 'flex-end',
+    marginTop: 2,
+  },
+  kelolaBtn: {
+    backgroundColor: '#B81414',
+    paddingHorizontal: 24,
+    paddingVertical: 8,
+    borderRadius: Radius.lg,
+  },
+  kelolaBtnText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  detailBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+  },
+  detailBtnText: {
+    color: '#B81414',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  centerBox: {
+    alignItems: 'center',
+    paddingVertical: 48,
     gap: 8,
   },
   emptyTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: Colors.textMain,
+    color: '#424242',
   },
-  emptySubtitle: {
+  emptySub: {
     fontSize: 13,
-    color: Colors.textSubtitle,
-  },
-  card: {
-    backgroundColor: Colors.white,
-    borderRadius: Radius.xl,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  imageContainer: {
-    height: 180,
-    width: '100%',
-    position: 'relative',
-  },
-  eventImage: {
-    width: '100%',
-    height: '100%',
-  },
-  newBadge: {
-    position: 'absolute',
-    top: Spacing.md,
-    left: Spacing.md,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: Radius.round,
-  },
-  newBadgeText: {
-    color: Colors.white,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  cardBody: {
-    padding: Spacing.base,
-  },
-  cardTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.textMain,
-    marginBottom: 6,
-  },
-  dateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  dateText: {
-    fontSize: 13,
-    color: Colors.textSubtitle,
-  },
-  registerBtn: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: Radius.round,
-  },
-  closedBtn: {
-    backgroundColor: '#757575',
-  },
-  registerBtnText: {
-    color: Colors.white,
-    fontSize: 13,
-    fontWeight: '700',
+    color: '#9E9E9E',
+    textAlign: 'center',
   },
 });

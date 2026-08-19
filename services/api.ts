@@ -84,7 +84,7 @@ api.interceptors.response.use(
   (response) => {
     // Jika backend mengirim interceptor standar: { statusCode, message, data, meta }
     if (response.data && typeof response.data === 'object' && 'data' in response.data) {
-      return response.data;
+      return response.data.data;
     }
     return response.data;
   },

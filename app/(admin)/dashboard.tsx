@@ -10,6 +10,8 @@ import {
   ScrollView,
   RefreshControl,
   ActivityIndicator,
+  Modal,
+  Pressable,
   Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,6 +31,7 @@ interface DashboardStats {
 export default function AdminDashboardScreen() {
   const { user, logout } = useAuth();
   const adminName = user?.student?.name || user?.email?.split('@')[0] || 'Admin';
+  const avatarUrl = user?.student?.avatarUrl;
 
   const [stats, setStats] = useState<DashboardStats>({
     totalSiswa: null,
@@ -37,6 +40,7 @@ export default function AdminDashboardScreen() {
   });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -81,21 +85,39 @@ export default function AdminDashboardScreen() {
     fetchStats();
   };
 
+  const handleLogout = async () => {
+    setShowLogoutModal(false);
+    await logout();
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <View style={styles.avatarBorder}>
-            <View style={styles.avatarInner}>
-              <Text style={styles.avatarInitial}>
-                {adminName.charAt(0).toUpperCase()}
-              </Text>
+          {avatarUrl ? (
+            <Image source={{ uri: avatarUrl }} style={styles.avatarImg} />
+          ) : (
+            <View style={styles.avatarBorder}>
+              <View style={styles.avatarInner}>
+                <Text style={styles.avatarInitial}>
+                  {adminName.charAt(0).toUpperCase()}
+                </Text>
+              </View>
             </View>
+          )}
+          <View>
+            <Text style={styles.greetLabel}>Selamat datang,</Text>
+            <Text style={styles.greetName} numberOfLines={1}>{adminName}</Text>
           </View>
         </View>
-        <Text style={styles.headerTitle}>Moklet Event Center</Text>
-        <View style={{ width: 44 }} />
+        <TouchableOpacity
+          style={styles.logoutBtn}
+          onPress={() => setShowLogoutModal(true)}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="log-out-outline" size={22} color={Colors.primary} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -186,6 +208,40 @@ export default function AdminDashboardScreen() {
           </>
         )}
       </ScrollView>
+
+      {/* Logout Confirmation Modal */}
+      <Modal
+        visible={showLogoutModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowLogoutModal(false)}
+      >
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => setShowLogoutModal(false)}
+        >
+          <View style={styles.modalCard} onStartShouldSetResponder={() => true}>
+            <View style={styles.modalIconWrap}>
+              <Ionicons name="log-out-outline" size={32} color={Colors.primary} />
+            </View>
+            <Text style={styles.modalTitle}>Keluar Akun</Text>
+            <Text style={styles.modalDesc}>
+              Apakah kamu yakin ingin keluar dari aplikasi Moklet Event Center?
+            </Text>
+            <View style={styles.modalActionRow}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setShowLogoutModal(false)}
+              >
+                <Text style={styles.modalCancelText}>Batal</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalConfirmBtn} onPress={handleLogout}>
+                <Text style={styles.modalConfirmText}>Ya, Keluar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -202,15 +258,30 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     backgroundColor: '#fff',
     paddingHorizontal: Spacing.base,
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  headerLeft: { width: 44, alignItems: 'flex-start' },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  avatarImg: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+  },
   avatarBorder: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     borderWidth: 2,
     borderColor: Colors.primary,
     padding: 2,
@@ -221,7 +292,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     borderRadius: 16,
-    backgroundColor: Colors.primaryLight,
+    backgroundColor: '#FEE2E2',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -230,10 +301,24 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: Colors.primary,
   },
-  headerTitle: {
-    fontSize: 16,
+  greetLabel: {
+    fontSize: 11,
+    color: '#94A3B8',
+    fontWeight: '500',
+  },
+  greetName: {
+    fontSize: 15,
     fontWeight: '800',
-    color: Colors.primary,
+    color: '#0F172A',
+    maxWidth: 200,
+  },
+  logoutBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   scrollContent: {
     padding: Spacing.base,
@@ -287,7 +372,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: Colors.primaryLight,
+    backgroundColor: '#FEE2E2',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -326,12 +411,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#1E1E1E',
   },
-  statPendingNote: {
-    fontSize: 10,
-    color: '#9E9E9E',
-    marginTop: 2,
-    fontStyle: 'italic',
-  },
   // Section title
   sectionTitle: {
     fontSize: 17,
@@ -367,4 +446,47 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1E1E1E',
   },
+  // Modal styles
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: Spacing.xl,
+  },
+  modalCard: {
+    width: '100%',
+    backgroundColor: '#fff',
+    borderRadius: Radius.xl,
+    padding: Spacing.xl,
+    alignItems: 'center',
+    gap: 12,
+  },
+  modalIconWrap: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalTitle: { fontSize: 18, fontWeight: '800', color: '#1E1E1E' },
+  modalDesc: { fontSize: 13, color: '#757575', textAlign: 'center' },
+  modalActionRow: { flexDirection: 'row', gap: Spacing.md, width: '100%', marginTop: 8 },
+  modalCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderRadius: Radius.lg,
+    backgroundColor: '#F1F5F9',
+  },
+  modalCancelText: { fontSize: 14, fontWeight: '700', color: '#475569' },
+  modalConfirmBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.primary,
+  },
+  modalConfirmText: { fontSize: 14, fontWeight: '700', color: '#fff' },
 });

@@ -1,4 +1,4 @@
-﻿// services/panitia/events.service.ts
+// services/panitia/events.service.ts
 import api from '../api';
 
 // ─── Raw API Shapes ────────────────────────────────────────────────────────────
@@ -12,6 +12,8 @@ export interface RawEvent {
   guidebookUrl?: string | null;
   creatorId?: string;
   createdAt?: string;
+  _count?: { categories?: number; registrations?: number; teams?: number };
+  categories?: RawCategory[];
 }
 
 export interface RawCategory {
@@ -53,6 +55,8 @@ export interface EventItem {
   id: string; name: string; description: string; eventDate: string;
   status: string; bannerUrl: string | null; guidebookUrl: string | null;
   creatorId: string; createdAt: string;
+  totalRegistrations?: number;
+  totalCategories?: number;
 }
 
 export interface CategoryItem {
@@ -74,11 +78,23 @@ export interface CommitteeMemberItem {
 
 // ─── Normalisers ───────────────────────────────────────────────────────────────
 export function normalizeEvent(raw: RawEvent): EventItem {
+  const count = raw._count;
+  const cats = raw.categories || [];
+  let totalRegistrations = (count?.registrations ?? 0) + (count?.teams ?? 0);
+  if (totalRegistrations === 0 && cats.length > 0) {
+    totalRegistrations = cats.reduce(
+      (acc, c) => acc + (c._count?.teams ?? 0) + (c._count?.registrations ?? 0),
+      0
+    );
+  }
+
   return {
     id: raw.id, name: raw.name || '', description: raw.description || '',
     eventDate: raw.eventDate || '', status: raw.status || 'ONGOING',
     bannerUrl: raw.bannerUrl || null, guidebookUrl: raw.guidebookUrl || null,
     creatorId: raw.creatorId || '', createdAt: raw.createdAt || '',
+    totalRegistrations,
+    totalCategories: count?.categories ?? cats.length,
   };
 }
 
@@ -224,3 +240,38 @@ export async function addCommitteeMember(eventId: string, studentId: string): Pr
 export async function removeCommitteeMember(eventId: string, studentId: string): Promise<void> {
   await api.delete(`/events/${eventId}/committee/${studentId}`);
 }
+
+export async function getManagedEventsForStudent(
+  studentId?: string,
+  userId?: string
+): Promise<EventItem[]> {
+  try {
+    const allEvents = await getEvents(1, 50);
+    if (!studentId && !userId) return [];
+
+    const checks = await Promise.allSettled(
+      allEvents.map(async (ev) => {
+        if (ev.creatorId && userId && ev.creatorId === userId) return { ev, isMember: true };
+        try {
+          const com = await getCommittee(ev.id);
+          const isMember = com.some((m) => m.studentId === studentId);
+          return { ev, isMember };
+        } catch {
+          return { ev, isMember: false };
+        }
+      })
+    );
+
+    const managed: EventItem[] = [];
+    checks.forEach((res) => {
+      if (res.status === 'fulfilled' && res.value.isMember) {
+        managed.push(res.value.ev);
+      }
+    });
+
+    return managed;
+  } catch {
+    return [];
+  }
+}
+

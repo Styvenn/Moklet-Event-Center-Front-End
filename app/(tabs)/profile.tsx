@@ -12,17 +12,15 @@ import {
   Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { Colors, Spacing, Radius } from '../../constants/theme';
 import { useAuth } from '../../context/AuthContext';
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
   const username = user?.student?.name || user?.email?.split('@')[0] || 'Siswa';
-  const classLabel = user?.student?.class
-    ? `${user.student.class.grade} ${user.student.class.name}`
-    : (user?.role ?? 'Siswa');
-  const avatarUrl = user?.student?.avatarUrl
-    || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80';
+  const schoolLabel = 'Siswa SMK Telkom Malang';
+  const avatarUrl = user?.student?.avatarUrl;
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const handleLogout = async () => {
@@ -32,105 +30,91 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* Header Title */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Profil Saya</Text>
-      </View>
-
-      {/* User Profile Card matching mockup */}
-      <View style={styles.profileCard}>
-        <View style={styles.avatarBorder}>
-          <Image
-            source={{ uri: avatarUrl }}
-            style={styles.avatarImage}
-          />
-        </View>
-        <View style={styles.profileTextContainer}>
+      <View style={styles.container}>
+        {/* Center Avatar & Info (Image 2) */}
+        <View style={styles.profileHeader}>
+          {avatarUrl ? (
+            <Image source={{ uri: avatarUrl }} style={styles.avatarImg} />
+          ) : (
+            <View style={styles.avatarCircle}>
+              <Ionicons name="person" size={54} color="#FFFFFF" />
+            </View>
+          )}
           <Text style={styles.profileName}>{username}</Text>
-          <Text style={styles.profileSubtitle}>{classLabel}</Text>
-        </View>
-        <TouchableOpacity
-          style={styles.logoutIconButton}
-          activeOpacity={0.7}
-          onPress={() => setShowLogoutModal(true)}
-        >
-          <Ionicons name="exit-outline" size={24} color="#3D2723" />
-        </TouchableOpacity>
-      </View>
-
-      {/* Menu Options */}
-      <View style={styles.menuSection}>
-        <View style={styles.menuCard}>
-          <TouchableOpacity style={styles.menuItem} activeOpacity={0.7}>
-            <View style={[styles.menuIcon, { backgroundColor: '#E3F2FD' }]}>
-              <Ionicons name="settings-outline" size={20} color="#1565C0" />
-            </View>
-            <Text style={styles.menuLabel}>Pengaturan Akun</Text>
-            <Ionicons name="chevron-forward" size={18} color="#BDBDBD" />
-          </TouchableOpacity>
-
-          <View style={styles.menuDivider} />
-
-          <TouchableOpacity style={styles.menuItem} activeOpacity={0.7}>
-            <View style={[styles.menuIcon, { backgroundColor: '#E8F5E9' }]}>
-              <Ionicons name="shield-checkmark-outline" size={20} color="#2E7D32" />
-            </View>
-            <Text style={styles.menuLabel}>Privasi & Keamanan</Text>
-            <Ionicons name="chevron-forward" size={18} color="#BDBDBD" />
-          </TouchableOpacity>
+          <Text style={styles.profileSubtitle}>{schoolLabel}</Text>
         </View>
 
-        <View style={styles.menuCard}>
+        {/* 3 Menu Cards (Image 2) */}
+        <View style={styles.menuList}>
+          {/* 1. Edit Profile */}
           <TouchableOpacity
-            style={styles.menuItem}
-            activeOpacity={0.7}
+            style={styles.menuCard}
+            activeOpacity={0.85}
+            onPress={() => router.push('/complete-profile' as any)}
+          >
+            <View style={styles.menuLeft}>
+              <Ionicons name="person-outline" size={22} color="#1E1E1E" />
+              <Text style={styles.menuLabel}>Edit Profile</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#64748B" />
+          </TouchableOpacity>
+
+          {/* 2. Ganti Password */}
+          <TouchableOpacity
+            style={styles.menuCard}
+            activeOpacity={0.85}
+            onPress={() => router.push('/login' as any)}
+          >
+            <View style={styles.menuLeft}>
+              <Ionicons name="lock-closed-outline" size={22} color="#1E1E1E" />
+              <Text style={styles.menuLabel}>Ganti password</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#64748B" />
+          </TouchableOpacity>
+
+          {/* 3. Keluar */}
+          <TouchableOpacity
+            style={styles.logoutCard}
+            activeOpacity={0.85}
             onPress={() => setShowLogoutModal(true)}
           >
-            <View style={[styles.menuIcon, { backgroundColor: Colors.primaryLight }]}>
-              <Ionicons name="log-out-outline" size={20} color={Colors.primary} />
+            <View style={styles.menuLeft}>
+              <Ionicons name="log-out-outline" size={22} color="#B81414" />
+              <Text style={styles.logoutLabel}>Keluar</Text>
             </View>
-            <Text style={[styles.menuLabel, { color: Colors.primary }]}>Keluar</Text>
-            <Ionicons name="chevron-forward" size={18} color={Colors.primary} />
+            <Ionicons name="chevron-forward" size={20} color="#B81414" />
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* App version */}
-      <Text style={styles.version}>Moklet Event Center v1.0.0</Text>
-
-      {/* Logout Modal */}
+      {/* Logout Confirmation Modal */}
       <Modal
         visible={showLogoutModal}
         transparent
         animationType="fade"
         onRequestClose={() => setShowLogoutModal(false)}
       >
-        <Pressable style={styles.overlay} onPress={() => setShowLogoutModal(false)}>
-          <Pressable style={styles.modal} onPress={(e) => e.stopPropagation()}>
-            <View style={styles.modalIcon}>
-              <Ionicons name="log-out-outline" size={32} color={Colors.primary} />
+        <Pressable style={styles.modalBackdrop} onPress={() => setShowLogoutModal(false)}>
+          <View style={styles.modalCard} onStartShouldSetResponder={() => true}>
+            <View style={styles.modalIconWrap}>
+              <Ionicons name="log-out-outline" size={32} color="#B81414" />
             </View>
             <Text style={styles.modalTitle}>Keluar Akun</Text>
             <Text style={styles.modalDesc}>
-              Apakah kamu yakin ingin keluar dari akun ini?
+              Apakah kamu yakin ingin keluar dari aplikasi Moklet Event Center?
             </Text>
-            <View style={styles.modalButtons}>
+            <View style={styles.modalActionRow}>
               <TouchableOpacity
-                style={styles.cancelBtn}
+                style={styles.modalCancelBtn}
                 onPress={() => setShowLogoutModal(false)}
-                activeOpacity={0.8}
               >
-                <Text style={styles.cancelBtnText}>Batal</Text>
+                <Text style={styles.modalCancelText}>Batal</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.logoutBtn}
-                onPress={handleLogout}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.logoutBtnText}>Keluar</Text>
+              <TouchableOpacity style={styles.modalConfirmBtn} onPress={handleLogout}>
+                <Text style={styles.modalConfirmText}>Ya, Keluar</Text>
               </TouchableOpacity>
             </View>
-          </Pressable>
+          </View>
         </Pressable>
       </Modal>
     </SafeAreaView>
@@ -140,195 +124,134 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F5F7FA',
+    backgroundColor: '#FFFFFF',
     paddingTop: Platform.OS === 'android' ? 36 : 0,
   },
-  header: {
+  container: {
+    flex: 1,
     paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.base,
-    paddingBottom: Spacing.xs,
-    backgroundColor: Colors.white,
+    paddingTop: 48,
   },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: Colors.primary,
-  },
-
-  // Profile Card Header
-  profileCard: {
-    flexDirection: 'row',
+  profileHeader: {
     alignItems: 'center',
-    backgroundColor: Colors.white,
-    borderRadius: Radius.xl,
-    paddingHorizontal: Spacing.base,
-    paddingVertical: 14,
-    marginHorizontal: Spacing.xl,
-    marginTop: Spacing.md,
-    marginBottom: Spacing.lg,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
+    marginBottom: 40,
   },
-  avatarBorder: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 1.5,
-    borderColor: '#E53935',
-    padding: 2,
+  avatarImg: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    marginBottom: 16,
+  },
+  avatarCircle: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: '#B81414',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  avatarImage: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 22,
-  },
-  profileTextContainer: {
-    flex: 1,
-    marginLeft: 12,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 3,
   },
   profileName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1E1E1E',
-    marginBottom: 2,
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 4,
   },
   profileSubtitle: {
-    fontSize: 13,
-    color: '#757575',
-    fontWeight: '400',
+    fontSize: 14,
+    color: '#64748B',
+    fontWeight: '500',
   },
-  logoutIconButton: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  // Menu Section
-  menuSection: {
-    paddingHorizontal: Spacing.xl,
-    gap: Spacing.md,
+  menuList: {
+    gap: 14,
   },
   menuCard: {
-    backgroundColor: Colors.white,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
     borderRadius: Radius.xl,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    paddingVertical: 18,
+    paddingHorizontal: Spacing.base,
     borderWidth: 1,
     borderColor: '#F1F5F9',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
   },
-  menuItem: {
+  logoutCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: Spacing.base,
+    justifyContent: 'space-between',
+    backgroundColor: '#FFF5F5',
+    borderRadius: Radius.xl,
+    paddingVertical: 18,
     paddingHorizontal: Spacing.base,
-    gap: Spacing.md,
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
   },
-  menuIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: Radius.lg,
+  menuLeft: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 14,
   },
   menuLabel: {
-    flex: 1,
     fontSize: 15,
-    fontWeight: '600',
-    color: Colors.textMain,
+    fontWeight: '700',
+    color: '#0F172A',
   },
-  menuDivider: {
-    height: 1,
-    backgroundColor: '#F0F0F0',
-    marginHorizontal: Spacing.base,
+  logoutLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#B81414',
   },
-  version: {
-    textAlign: 'center',
-    fontSize: 12,
-    color: Colors.textSubtitle,
-    marginTop: Spacing.xl,
-  },
-
-  // Modal
-  overlay: {
+  modalBackdrop: {
     flex: 1,
-    backgroundColor: Colors.overlay,
+    backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: Spacing.xl,
   },
-  modal: {
-    backgroundColor: Colors.white,
-    borderRadius: 24,
-    padding: Spacing.xl,
+  modalCard: {
     width: '100%',
+    backgroundColor: '#fff',
+    borderRadius: Radius.xl,
+    padding: Spacing.xl,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 20,
-    elevation: 10,
+    gap: 12,
   },
-  modalIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: Colors.primaryLight,
+  modalIconWrap: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#FEE2E2',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Spacing.base,
   },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: Colors.textMain,
-    marginBottom: Spacing.sm,
-  },
-  modalDesc: {
-    fontSize: 14,
-    color: Colors.textSubtitle,
-    textAlign: 'center',
-    lineHeight: 21,
-    marginBottom: Spacing.xl,
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    gap: Spacing.md,
-    width: '100%',
-  },
-  cancelBtn: {
+  modalTitle: { fontSize: 18, fontWeight: '800', color: '#1E1E1E' },
+  modalDesc: { fontSize: 13, color: '#757575', textAlign: 'center' },
+  modalActionRow: { flexDirection: 'row', gap: Spacing.md, width: '100%', marginTop: 8 },
+  modalCancelBtn: {
     flex: 1,
-    paddingVertical: 13,
-    borderRadius: Radius.round,
-    borderWidth: 1.5,
-    borderColor: '#E0E0E0',
+    paddingVertical: 12,
     alignItems: 'center',
+    borderRadius: Radius.lg,
+    backgroundColor: '#F1F5F9',
   },
-  cancelBtnText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.textMain,
-  },
-  logoutBtn: {
+  modalCancelText: { fontSize: 14, fontWeight: '700', color: '#475569' },
+  modalConfirmBtn: {
     flex: 1,
-    paddingVertical: 13,
-    borderRadius: Radius.round,
-    backgroundColor: Colors.primary,
+    paddingVertical: 12,
     alignItems: 'center',
+    borderRadius: Radius.lg,
+    backgroundColor: '#B81414',
   },
-  logoutBtnText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.white,
-  },
+  modalConfirmText: { fontSize: 14, fontWeight: '700', color: '#fff' },
 });

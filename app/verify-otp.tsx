@@ -106,6 +106,11 @@ export default function VerifyOTPScreen() {
 
       if (provider === 'google') {
         router.replace({ pathname: '/setup-password', params: { email: displayEmail } });
+      } else if (currentUser?.role === 'ADMIN_KESISWAAN') {
+        router.replace('/(admin)/dashboard');
+      } else if (currentUser?.role === 'PANITIA') {
+        // Panitia bukan siswa, tidak perlu lewat complete-profile
+        router.replace('/(tabs)/home');
       } else if (currentUser && currentUser.student) {
         router.replace('/(tabs)/home');
       } else {

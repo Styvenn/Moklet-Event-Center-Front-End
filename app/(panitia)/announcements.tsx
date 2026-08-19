@@ -1,8 +1,9 @@
-﻿// app/(panitia)/announcements.tsx
+// app/(panitia)/announcements.tsx
 import React, { useState, useCallback, useEffect } from "react";
 import {
   View, Text, StyleSheet, SafeAreaView, Platform, FlatList,
   TouchableOpacity, ActivityIndicator, RefreshControl, Modal, TextInput, Alert, ScrollView,
+  KeyboardAvoidingView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
@@ -199,7 +200,10 @@ export default function AnnouncementsScreen() {
 
       {/* Modal Form Buat / Edit Pengumuman */}
       <Modal visible={showModal} animationType="slide" transparent onRequestClose={() => setShowModal(false)}>
-        <View style={ms.overlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={ms.overlay}
+        >
           <View style={ms.sheet}>
             <View style={ms.handle} />
             <View style={ms.sheetHeader}>
@@ -272,7 +276,7 @@ export default function AnnouncementsScreen() {
               {submitting ? <ActivityIndicator color="#fff" /> : <Text style={ms.submitBtnText}>{editId ? "Simpan Perubahan" : "Publikasikan"}</Text>}
             </TouchableOpacity>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );

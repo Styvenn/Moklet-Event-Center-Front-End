@@ -1,250 +1,551 @@
-﻿// app/(panitia)/dashboard.tsx
+// app/(panitia)/dashboard.tsx
 import React, { useState, useCallback } from "react";
 import {
-  View, Text, StyleSheet, SafeAreaView, Platform, ScrollView,
-  TouchableOpacity, ActivityIndicator, RefreshControl, Image,
+  View,
+  Text,
+  StyleSheet,
+  SafeAreaView,
+  Platform,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+  RefreshControl,
+  Image,
+  Alert,
+  Modal,
+  Pressable,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
-import { useFocusEffect } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { Colors, Spacing, Radius } from "../../constants/theme";
 import { useAuth } from "../../context/AuthContext";
 import { getEvents, EventItem } from "../../services/panitia/events.service";
-
-function formatDate(dateStr: string): string {
-  if (!dateStr) return "-";
-  try {
-    return new Date(dateStr).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
-  } catch { return dateStr; }
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const isOngoing = status === "ONGOING";
-  return (
-    <View style={[sb.badge, isOngoing ? sb.ongoing : sb.closed]}>
-      <Text style={[sb.text, isOngoing ? sb.ongoingText : sb.closedText]}>
-        {isOngoing ? "Berlangsung" : "Selesai"}
-      </Text>
-    </View>
-  );
-}
-
-const sb = StyleSheet.create({
-  badge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },
-  ongoing: { backgroundColor: "#E8F5E9" }, closed: { backgroundColor: "#EFEBE9" },
-  text: { fontSize: 11, fontWeight: "700" },
-  ongoingText: { color: "#2E7D32" }, closedText: { color: "#6D4C41" },
-});
+import { getPanitia } from "../../services/admin/panitia.service";
 
 export default function PanitiaDashboardScreen() {
   const { user, logout } = useAuth();
-  const displayName = user?.student?.name || user?.email?.split("@")[0] || "Panitia";
+  const username =
+    user?.student?.name || user?.email?.split("@")[0] || "Panitia";
+  const avatarUrl = user?.student?.avatarUrl;
 
   const [events, setEvents] = useState<EventItem[]>([]);
+  const [panitiaCount, setPanitiaCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
-  const load = useCallback(async () => {
+  const loadData = useCallback(async () => {
     setError("");
     try {
-      const all = await getEvents(1, 50);
-      setEvents(all);
+      const [eventsRes, panitiaRes] = await Promise.allSettled([
+        getEvents(1, 100),
+        getPanitia(),
+      ]);
+
+      if (eventsRes.status === "fulfilled") {
+        setEvents(eventsRes.value);
+      }
+      if (panitiaRes.status === "fulfilled") {
+        const activeList = panitiaRes.value.filter((p) => p.isActive);
+        setPanitiaCount(activeList.length || panitiaRes.value.length);
+      }
     } catch {
-      setError("Gagal memuat data. Tarik untuk mencoba ulang.");
+      setError("Gagal memuat data operasional.");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, []);
 
-  useFocusEffect(useCallback(() => { setLoading(true); load(); }, [load]));
-  const onRefresh = () => { setRefreshing(true); load(); };
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
+      loadData();
+    }, [loadData])
+  );
 
-  const totalLomba = 0; // akan diisi setelah fetch detail per event (tidak di-batch dulu)
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadData();
+  };
+
+  const handleLogout = async () => {
+    setShowLogoutModal(false);
+    await logout();
+  };
+
   const ongoingCount = events.filter((e) => e.status === "ONGOING").length;
-  const recentEvents = events.slice(0, 3);
 
   return (
     <SafeAreaView style={styles.safe}>
       {/* Header */}
       <View style={styles.header}>
-        <View style={styles.avatarCircle}>
-          <Text style={styles.avatarInitial}>{displayName.charAt(0).toUpperCase()}</Text>
+        <View style={styles.headerLeft}>
+          {avatarUrl ? (
+            <Image source={{ uri: avatarUrl }} style={styles.avatarImg} />
+          ) : (
+            <View style={styles.avatarCircle}>
+              <Text style={styles.avatarInitial}>
+                {username.charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          )}
+          <View>
+            <Text style={styles.greetLabel}>Selamat datang,</Text>
+            <Text style={styles.greetName} numberOfLines={1}>
+              {username}
+            </Text>
+          </View>
         </View>
-        <Text style={styles.headerTitle}>MEC Panitia</Text>
-        <TouchableOpacity onPress={logout} style={styles.logoutBtn}>
-          <Ionicons name="log-out-outline" size={22} color="#78909C" />
+        <TouchableOpacity
+          style={styles.logoutBtn}
+          onPress={() => setShowLogoutModal(true)}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="log-out-outline" size={22} color={Colors.primary} />
         </TouchableOpacity>
       </View>
 
       <ScrollView
         contentContainerStyle={styles.scroll}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[Colors.primary]}
+          />
+        }
       >
-        <Text style={styles.greeting}>Halo, {displayName} 👋</Text>
-        <Text style={styles.subtitle}>Berikut ringkasan aktivitas event kamu.</Text>
+        {/* Page Title */}
+        <View style={styles.titleSection}>
+          <Text style={styles.mainTitle}>Dashboard Panitia</Text>
+          <Text style={styles.subTitle}>
+            Ringkasan data operasional event hari ini.
+          </Text>
+        </View>
 
         {loading ? (
-          <View style={styles.loaderBox}><ActivityIndicator size="large" color={Colors.primary} /></View>
+          <View style={styles.loaderBox}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+          </View>
         ) : error ? (
           <View style={styles.errorBox}>
-            <Ionicons name="alert-circle-outline" size={20} color={Colors.primary} />
+            <Ionicons
+              name="alert-circle-outline"
+              size={20}
+              color={Colors.primary}
+            />
             <Text style={styles.errorText}>{error}</Text>
           </View>
         ) : (
           <>
-            {/* Stats row */}
+            {/* Stats Row */}
             <View style={styles.statsRow}>
-              <View style={styles.statCard}>
-                <View style={[styles.statIcon, { backgroundColor: "#FFEBEE" }]}>
-                  <Ionicons name="calendar" size={22} color={Colors.primary} />
+              {/* Total Event */}
+              <View style={[styles.statCard, { flex: 1 }]}>
+                <View
+                  style={[
+                    styles.statIconWrap,
+                    { backgroundColor: "#FEE2E2" },
+                  ]}
+                >
+                  <Ionicons name="calendar" size={20} color={Colors.primary} />
                 </View>
-                <Text style={styles.statValue}>{events.length}</Text>
+                <Text style={styles.statVal}>{events.length}</Text>
                 <Text style={styles.statLabel}>Total Event</Text>
               </View>
-              <View style={styles.statCard}>
-                <View style={[styles.statIcon, { backgroundColor: "#E8F5E9" }]}>
-                  <Ionicons name="play-circle" size={22} color="#2E7D32" />
+
+              {/* Event Berjalan */}
+              <View style={[styles.statCard, { flex: 1 }]}>
+                <View
+                  style={[
+                    styles.statIconWrap,
+                    { backgroundColor: "#DCFCE7" },
+                  ]}
+                >
+                  <Ionicons
+                    name="play-circle"
+                    size={20}
+                    color="#16A34A"
+                  />
                 </View>
-                <Text style={styles.statValue}>{ongoingCount}</Text>
-                <Text style={styles.statLabel}>Berlangsung</Text>
+                <Text style={styles.statVal}>{ongoingCount}</Text>
+                <Text style={styles.statLabel}>Berjalan</Text>
               </View>
-              <View style={styles.statCard}>
-                <View style={[styles.statIcon, { backgroundColor: "#E3F2FD" }]}>
-                  <Ionicons name="checkmark-circle" size={22} color="#1565C0" />
+
+              {/* Panitia Aktif */}
+              <View style={[styles.statCard, { flex: 1 }]}>
+                <View
+                  style={[
+                    styles.statIconWrap,
+                    { backgroundColor: "#FEF3C7" },
+                  ]}
+                >
+                  <Ionicons name="people" size={20} color="#D97706" />
                 </View>
-                <Text style={styles.statValue}>{events.length - ongoingCount}</Text>
-                <Text style={styles.statLabel}>Selesai</Text>
+                <Text style={styles.statVal}>{panitiaCount}</Text>
+                <Text style={styles.statLabel}>Panitia Aktif</Text>
               </View>
             </View>
 
-            {/* Quick actions */}
-            <View style={styles.sectionRow}>
-              <Text style={styles.sectionTitle}>Aksi Cepat</Text>
-            </View>
-            <TouchableOpacity style={styles.actionCard} onPress={() => router.push("/(panitia)/events/create" as any)}>
-              <View style={[styles.actionIcon, { backgroundColor: "#FFEBEE" }]}>
-                <Ionicons name="add-circle-outline" size={22} color={Colors.primary} />
+            {/* Aksi Cepat */}
+            <Text style={styles.sectionTitle}>Aksi Cepat</Text>
+
+            <TouchableOpacity
+              style={styles.actionCard}
+              activeOpacity={0.85}
+              onPress={() => router.push("/(panitia)/events" as any)}
+            >
+              <View
+                style={[
+                  styles.actionIconCircle,
+                  { backgroundColor: "#FEE2E2" },
+                ]}
+              >
+                <Ionicons
+                  name="calendar-outline"
+                  size={22}
+                  color={Colors.primary}
+                />
               </View>
-              <Text style={styles.actionText}>Buat Event Baru</Text>
-              <Ionicons name="chevron-forward" size={18} color="#BDBDBD" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionCard} onPress={() => router.push("/(panitia)/announcements" as any)}>
-              <View style={[styles.actionIcon, { backgroundColor: "#FFF8E1" }]}>
-                <Ionicons name="megaphone-outline" size={22} color="#F57F17" />
+              <View style={styles.actionInfo}>
+                <Text style={styles.actionTitle}>Kelola Event</Text>
+                <Text style={styles.actionSub}>
+                  Buat, edit, dan kelola event lomba
+                </Text>
               </View>
-              <Text style={styles.actionText}>Kelola Pengumuman</Text>
-              <Ionicons name="chevron-forward" size={18} color="#BDBDBD" />
+              <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
             </TouchableOpacity>
 
-            {/* Recent events */}
-            {recentEvents.length > 0 && (
-              <>
-                <View style={styles.sectionRow}>
-                  <Text style={styles.sectionTitle}>Event Terbaru</Text>
-                  <TouchableOpacity onPress={() => router.push("/(panitia)/events" as any)}>
-                    <Text style={styles.seeAll}>Lihat semua</Text>
-                  </TouchableOpacity>
-                </View>
-                {recentEvents.map((ev) => (
-                  <TouchableOpacity
-                    key={ev.id}
-                    style={styles.eventCard}
-                    activeOpacity={0.85}
-                    onPress={() => router.push({ pathname: "/(panitia)/events/[id]", params: { id: ev.id } } as any)}
-                  >
-                    {ev.bannerUrl ? (
-                      <Image source={{ uri: ev.bannerUrl }} style={styles.eventBanner} />
-                    ) : (
-                      <View style={styles.eventBannerPlaceholder}>
-                        <Ionicons name="image-outline" size={28} color="#BDBDBD" />
-                      </View>
-                    )}
-                    <View style={styles.eventInfo}>
-                      <Text style={styles.eventName} numberOfLines={1}>{ev.name}</Text>
-                      <View style={styles.eventMeta}>
-                        <Ionicons name="calendar-outline" size={12} color="#9E9E9E" />
-                        <Text style={styles.eventDate}>{formatDate(ev.eventDate)}</Text>
-                      </View>
-                    </View>
-                    <StatusBadge status={ev.status} />
-                  </TouchableOpacity>
-                ))}
-              </>
-            )}
-
-            {events.length === 0 && (
-              <View style={styles.emptyBox}>
-                <Ionicons name="calendar-outline" size={52} color="#BDBDBD" />
-                <Text style={styles.emptyTitle}>Belum ada event</Text>
-                <Text style={styles.emptySubtitle}>Mulai buat event baru untuk mengelola lomba dan panitia.</Text>
+            <TouchableOpacity
+              style={styles.actionCard}
+              activeOpacity={0.85}
+              onPress={() => router.push("/(panitia)/announcements" as any)}
+            >
+              <View
+                style={[
+                  styles.actionIconCircle,
+                  { backgroundColor: "#FEF3C7" },
+                ]}
+              >
+                <Ionicons
+                  name="megaphone-outline"
+                  size={22}
+                  color="#D97706"
+                />
               </View>
-            )}
+              <View style={styles.actionInfo}>
+                <Text style={styles.actionTitle}>Kelola Pengumuman</Text>
+                <Text style={styles.actionSub}>
+                  Publikasikan informasi kepada peserta
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.actionCard, { marginBottom: 0 }]}
+              activeOpacity={0.85}
+              onPress={() => router.push("/(panitia)/events/create" as any)}
+            >
+              <View
+                style={[
+                  styles.actionIconCircle,
+                  { backgroundColor: "#DCFCE7" },
+                ]}
+              >
+                <Ionicons
+                  name="add-circle-outline"
+                  size={22}
+                  color="#16A34A"
+                />
+              </View>
+              <View style={styles.actionInfo}>
+                <Text style={styles.actionTitle}>Buat Event Baru</Text>
+                <Text style={styles.actionSub}>
+                  Tambahkan event kompetisi baru
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+            </TouchableOpacity>
           </>
         )}
       </ScrollView>
+
+      {/* Logout Confirmation Modal */}
+      <Modal
+        visible={showLogoutModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowLogoutModal(false)}
+      >
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => setShowLogoutModal(false)}
+        >
+          <View
+            style={styles.modalCard}
+            onStartShouldSetResponder={() => true}
+          >
+            <View style={styles.modalIconWrap}>
+              <Ionicons name="log-out-outline" size={32} color={Colors.primary} />
+            </View>
+            <Text style={styles.modalTitle}>Keluar Akun</Text>
+            <Text style={styles.modalDesc}>
+              Apakah kamu yakin ingin keluar dari aplikasi Moklet Event Center?
+            </Text>
+            <View style={styles.modalActionRow}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setShowLogoutModal(false)}
+              >
+                <Text style={styles.modalCancelText}>Batal</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalConfirmBtn}
+                onPress={handleLogout}
+              >
+                <Text style={styles.modalConfirmText}>Ya, Keluar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#F5F7FA", paddingTop: Platform.OS === "android" ? 36 : 0 },
+  safe: {
+    flex: 1,
+    backgroundColor: "#F5F7FA",
+    paddingTop: Platform.OS === "android" ? 36 : 0,
+  },
   header: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    backgroundColor: "#fff", paddingHorizontal: Spacing.base, paddingVertical: 10,
-    borderBottomWidth: 1, borderBottomColor: "#F0F0F0",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: Spacing.base,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0F0F0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1,
+  },
+  avatarImg: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
   },
   avatarCircle: {
-    width: 38, height: 38, borderRadius: 19, backgroundColor: Colors.primaryLight,
-    alignItems: "center", justifyContent: "center",
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: Colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  avatarInitial: { fontSize: 16, fontWeight: "800", color: Colors.primary },
-  headerTitle: { fontSize: 16, fontWeight: "800", color: Colors.primary },
-  logoutBtn: { width: 38, height: 38, alignItems: "center", justifyContent: "center" },
-  scroll: { padding: Spacing.base, paddingBottom: 32 },
-  greeting: { fontSize: 22, fontWeight: "800", color: "#1E1E1E", marginBottom: 4 },
-  subtitle: { fontSize: 13, color: "#757575", marginBottom: Spacing.base },
-  loaderBox: { paddingVertical: 60, alignItems: "center" },
-  errorBox: {
-    flexDirection: "row", gap: 8, backgroundColor: "#FFEBEE", borderRadius: Radius.lg,
-    padding: Spacing.md, marginTop: Spacing.md, alignItems: "center",
+  avatarInitial: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#FFFFFF",
   },
-  errorText: { flex: 1, fontSize: 13, color: Colors.primary },
-  statsRow: { flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.base },
+  greetLabel: {
+    fontSize: 11,
+    color: "#94A3B8",
+    fontWeight: "500",
+  },
+  greetName: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#0F172A",
+    maxWidth: 200,
+  },
+  logoutBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#FEE2E2",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  scroll: {
+    padding: Spacing.base,
+    paddingBottom: 40,
+  },
+  titleSection: {
+    marginBottom: Spacing.base,
+  },
+  mainTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#0F172A",
+    marginBottom: 2,
+  },
+  subTitle: {
+    fontSize: 12,
+    color: "#64748B",
+  },
+  statsRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: Spacing.base,
+  },
   statCard: {
-    flex: 1, backgroundColor: "#fff", borderRadius: Radius.xl, padding: Spacing.md,
-    alignItems: "center", gap: 6,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 2,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 14,
+    alignItems: "flex-start",
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+    gap: 6,
   },
-  statIcon: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
-  statValue: { fontSize: 24, fontWeight: "800", color: "#1E1E1E" },
-  statLabel: { fontSize: 11, color: "#757575", fontWeight: "500", textAlign: "center" },
-  sectionRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.sm, marginTop: Spacing.md },
-  sectionTitle: { fontSize: 16, fontWeight: "700", color: "#1E1E1E" },
-  seeAll: { fontSize: 13, color: Colors.primary, fontWeight: "600" },
+  statIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 2,
+  },
+  statVal: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  statLabel: {
+    fontSize: 11,
+    color: "#64748B",
+    fontWeight: "500",
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0F172A",
+    marginBottom: 12,
+    marginTop: 4,
+  },
   actionCard: {
-    flexDirection: "row", alignItems: "center", backgroundColor: "#fff", borderRadius: Radius.xl,
-    padding: Spacing.base, marginBottom: Spacing.sm, gap: Spacing.md,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 6, elevation: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+    gap: 14,
   },
-  actionIcon: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
-  actionText: { flex: 1, fontSize: 14, fontWeight: "600", color: "#1E1E1E" },
-  eventCard: {
-    flexDirection: "row", alignItems: "center", backgroundColor: "#fff", borderRadius: Radius.xl,
-    padding: Spacing.sm, marginBottom: Spacing.sm, gap: Spacing.md,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 6, elevation: 1,
+  actionIconCircle: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  eventBanner: { width: 60, height: 60, borderRadius: Radius.lg },
-  eventBannerPlaceholder: {
-    width: 60, height: 60, borderRadius: Radius.lg, backgroundColor: "#F5F5F5",
-    alignItems: "center", justifyContent: "center",
+  actionInfo: {
+    flex: 1,
   },
-  eventInfo: { flex: 1, gap: 4 },
-  eventName: { fontSize: 14, fontWeight: "700", color: "#1E1E1E" },
-  eventMeta: { flexDirection: "row", alignItems: "center", gap: 4 },
-  eventDate: { fontSize: 12, color: "#9E9E9E" },
-  emptyBox: { alignItems: "center", paddingVertical: 48, gap: 10 },
-  emptyTitle: { fontSize: 16, fontWeight: "700", color: "#424242" },
-  emptySubtitle: { fontSize: 13, color: "#9E9E9E", textAlign: "center", paddingHorizontal: 32 },
+  actionTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#0F172A",
+    marginBottom: 2,
+  },
+  actionSub: {
+    fontSize: 12,
+    color: "#64748B",
+  },
+  loaderBox: {
+    paddingVertical: 60,
+    alignItems: "center",
+  },
+  errorBox: {
+    flexDirection: "row",
+    gap: 8,
+    backgroundColor: "#FFEBEE",
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+    marginTop: Spacing.md,
+    alignItems: "center",
+  },
+  errorText: {
+    flex: 1,
+    fontSize: 13,
+    color: Colors.primary,
+  },
+  // Modal styles
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: Spacing.xl,
+  },
+  modalCard: {
+    width: "100%",
+    backgroundColor: "#fff",
+    borderRadius: Radius.xl,
+    padding: Spacing.xl,
+    alignItems: "center",
+    gap: 12,
+  },
+  modalIconWrap: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "#FEE2E2",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalTitle: { fontSize: 18, fontWeight: "800", color: "#1E1E1E" },
+  modalDesc: {
+    fontSize: 13,
+    color: "#757575",
+    textAlign: "center",
+  },
+  modalActionRow: {
+    flexDirection: "row",
+    gap: Spacing.md,
+    width: "100%",
+    marginTop: 8,
+  },
+  modalCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: "center",
+    borderRadius: Radius.lg,
+    backgroundColor: "#F1F5F9",
+  },
+  modalCancelText: { fontSize: 14, fontWeight: "700", color: "#475569" },
+  modalConfirmBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: "center",
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.primary,
+  },
+  modalConfirmText: { fontSize: 14, fontWeight: "700", color: "#fff" },
 });

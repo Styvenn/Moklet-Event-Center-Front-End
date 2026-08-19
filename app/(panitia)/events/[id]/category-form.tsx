@@ -1,4 +1,4 @@
-﻿// app/(panitia)/events/[id]/category-form.tsx
+// app/(panitia)/events/[id]/category-form.tsx
 import React, { useState, useEffect } from "react";
 import {
   View, Text, StyleSheet, SafeAreaView, Platform, ScrollView,
@@ -112,7 +112,11 @@ export default function CategoryFormScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+        style={{ flex: 1 }}
+      >
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
             <Ionicons name="arrow-back" size={24} color="#1E1E1E" />
@@ -121,7 +125,11 @@ export default function CategoryFormScreen() {
           <View style={{ width: 38 }} />
         </View>
 
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={[styles.scroll, { paddingBottom: 60 }]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           {errors.general ? (
             <View style={styles.errorBox}>
               <Ionicons name="alert-circle-outline" size={18} color={Colors.primary} />

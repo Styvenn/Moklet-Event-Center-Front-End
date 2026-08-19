@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   Alert,
   RefreshControl,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -366,67 +367,72 @@ export default function DaftarLombaScreen() {
         </Pressable>
       </Modal>
 
-      {/* MODAL 2: Enter Code Modal (Masukkan Kode Room) */}
+      {/* MODAL 2: Enter Room Code Modal */}
       <Modal
         visible={showEnterCodeModal}
         transparent
         animationType="fade"
         onRequestClose={() => !submitting && setShowEnterCodeModal(false)}
       >
-        <Pressable
-          style={styles.overlay}
-          onPress={() => !submitting && setShowEnterCodeModal(false)}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={{ flex: 1 }}
         >
-          <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
-            <Text style={styles.enterCodeTitle}>Masukkan Kode Room</Text>
-            <Text style={styles.enterCodeDesc}>
-              Masukkan kode tim yang diberikan oleh ketua tim (leader).
-            </Text>
+          <Pressable
+            style={styles.overlay}
+            onPress={() => !submitting && setShowEnterCodeModal(false)}
+          >
+            <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
+              <Text style={styles.enterCodeTitle}>Masukkan Kode Room</Text>
+              <Text style={styles.enterCodeDesc}>
+                Masukkan kode tim yang diberikan oleh ketua tim (leader).
+              </Text>
 
-            {modalError ? (
-              <View style={styles.modalErrorBox}>
-                <Ionicons name="alert-circle-outline" size={16} color={Colors.error} />
-                <Text style={styles.modalErrorText}>{modalError}</Text>
-              </View>
-            ) : null}
+              {modalError ? (
+                <View style={styles.modalErrorBox}>
+                  <Ionicons name="alert-circle-outline" size={16} color={Colors.error} />
+                  <Text style={styles.modalErrorText}>{modalError}</Text>
+                </View>
+              ) : null}
 
-            <TextInput
-              style={styles.codeInputBox}
-              placeholder="KODE TIM"
-              placeholderTextColor="#94A3B8"
-              value={roomCodeInput}
-              onChangeText={(t) => {
-                setRoomCodeInput(t);
-                if (modalError) setModalError(null);
-              }}
-              autoCapitalize="characters"
-              autoFocus
-              editable={!submitting}
-            />
+              <TextInput
+                style={styles.codeInputBox}
+                placeholder="KODE TIM"
+                placeholderTextColor="#94A3B8"
+                value={roomCodeInput}
+                onChangeText={(t) => {
+                  setRoomCodeInput(t);
+                  if (modalError) setModalError(null);
+                }}
+                autoCapitalize="characters"
+                autoFocus
+                editable={!submitting}
+              />
 
-            <TouchableOpacity
-              style={[styles.gabungRoomBtn, (!roomCodeInput.trim() || submitting) && { opacity: 0.6 }]}
-              activeOpacity={0.85}
-              onPress={handleJoinTeamSubmit}
-              disabled={!roomCodeInput.trim() || submitting}
-            >
-              {submitting ? (
-                <ActivityIndicator color={Colors.white} size="small" />
-              ) : (
-                <Text style={styles.gabungRoomText}>Gabung Room</Text>
-              )}
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.gabungRoomBtn, (!roomCodeInput.trim() || submitting) && { opacity: 0.6 }]}
+                activeOpacity={0.85}
+                onPress={handleJoinTeamSubmit}
+                disabled={!roomCodeInput.trim() || submitting}
+              >
+                {submitting ? (
+                  <ActivityIndicator color={Colors.white} size="small" />
+                ) : (
+                  <Text style={styles.gabungRoomText}>Gabung Room</Text>
+                )}
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.cancelFullBtn}
-              activeOpacity={0.8}
-              onPress={() => setShowEnterCodeModal(false)}
-              disabled={submitting}
-            >
-              <Text style={styles.cancelFullText}>Batal</Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.cancelFullBtn}
+                activeOpacity={0.8}
+                onPress={() => setShowEnterCodeModal(false)}
+                disabled={submitting}
+              >
+                <Text style={styles.cancelFullText}>Batal</Text>
+              </TouchableOpacity>
+            </Pressable>
           </Pressable>
-        </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* MODAL 3: Create Team Modal (Buat Tim Baru) */}
@@ -436,59 +442,64 @@ export default function DaftarLombaScreen() {
         animationType="fade"
         onRequestClose={() => !submitting && setShowCreateTeamModal(false)}
       >
-        <Pressable
-          style={styles.overlay}
-          onPress={() => !submitting && setShowCreateTeamModal(false)}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={{ flex: 1 }}
         >
-          <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
-            <Text style={styles.enterCodeTitle}>Buat Room Tim</Text>
-            <Text style={styles.enterCodeDesc}>
-              Masukkan nama tim untuk cabang lomba "{selectedCategory?.name}". Anda otomatis menjadi Leader tim.
-            </Text>
+          <Pressable
+            style={styles.overlay}
+            onPress={() => !submitting && setShowCreateTeamModal(false)}
+          >
+            <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
+              <Text style={styles.enterCodeTitle}>Buat Room Tim</Text>
+              <Text style={styles.enterCodeDesc}>
+                Masukkan nama tim untuk cabang lomba "{selectedCategory?.name}". Anda otomatis menjadi Leader tim.
+              </Text>
 
-            {modalError ? (
-              <View style={styles.modalErrorBox}>
-                <Ionicons name="alert-circle-outline" size={16} color={Colors.error} />
-                <Text style={styles.modalErrorText}>{modalError}</Text>
-              </View>
-            ) : null}
+              {modalError ? (
+                <View style={styles.modalErrorBox}>
+                  <Ionicons name="alert-circle-outline" size={16} color={Colors.error} />
+                  <Text style={styles.modalErrorText}>{modalError}</Text>
+                </View>
+              ) : null}
 
-            <TextInput
-              style={[styles.codeInputBox, { letterSpacing: 0, fontSize: 16, textAlign: 'left', paddingHorizontal: 16 }]}
-              placeholder="Contoh: Tim Garuda Moklet"
-              placeholderTextColor="#94A3B8"
-              value={teamNameInput}
-              onChangeText={(t) => {
-                setTeamNameInput(t);
-                if (modalError) setModalError(null);
-              }}
-              autoFocus
-              editable={!submitting}
-            />
+              <TextInput
+                style={[styles.codeInputBox, { letterSpacing: 0, fontSize: 16, textAlign: 'left', paddingHorizontal: 16 }]}
+                placeholder="Contoh: Tim Garuda Moklet"
+                placeholderTextColor="#94A3B8"
+                value={teamNameInput}
+                onChangeText={(t) => {
+                  setTeamNameInput(t);
+                  if (modalError) setModalError(null);
+                }}
+                autoFocus
+                editable={!submitting}
+              />
 
-            <TouchableOpacity
-              style={[styles.gabungRoomBtn, (!teamNameInput.trim() || submitting) && { opacity: 0.6 }]}
-              activeOpacity={0.85}
-              onPress={handleCreateTeamSubmit}
-              disabled={!teamNameInput.trim() || submitting}
-            >
-              {submitting ? (
-                <ActivityIndicator color={Colors.white} size="small" />
-              ) : (
-                <Text style={styles.gabungRoomText}>Buat Tim Sekarang</Text>
-              )}
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.gabungRoomBtn, (!teamNameInput.trim() || submitting) && { opacity: 0.6 }]}
+                activeOpacity={0.85}
+                onPress={handleCreateTeamSubmit}
+                disabled={!teamNameInput.trim() || submitting}
+              >
+                {submitting ? (
+                  <ActivityIndicator color={Colors.white} size="small" />
+                ) : (
+                  <Text style={styles.gabungRoomText}>Buat Tim Sekarang</Text>
+                )}
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.cancelFullBtn}
-              activeOpacity={0.8}
-              onPress={() => setShowCreateTeamModal(false)}
-              disabled={submitting}
-            >
-              <Text style={styles.cancelFullText}>Batal</Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.cancelFullBtn}
+                activeOpacity={0.8}
+                onPress={() => setShowCreateTeamModal(false)}
+                disabled={submitting}
+              >
+                <Text style={styles.cancelFullText}>Batal</Text>
+              </TouchableOpacity>
+            </Pressable>
           </Pressable>
-        </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );

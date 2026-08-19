@@ -1,5 +1,5 @@
 // app/(tabs)/home.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,228 +13,439 @@ import {
   Modal,
   Pressable,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Colors, Spacing, Radius } from '../../constants/theme';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
+import {
+  getManagedEventsForStudent,
+  EventItem,
+} from '../../services/panitia/events.service';
+import {
+  getAnnouncements,
+  AnnouncementItem,
+} from '../../services/panitia/announcements.service';
 
 const { width } = Dimensions.get('window');
 const BANNER_WIDTH = width - Spacing.xl * 2;
 
-export interface RealEvent {
-  id: string;
-  name: string;
-  description?: string;
-  eventDate: string;
-  status?: string;
-  bannerUrl?: string;
+function formatDate(dateStr?: string) {
+  if (!dateStr) return '-';
+  try {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('id-ID', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+  } catch (e) {
+    return dateStr;
+  }
 }
 
-export interface RealAnnouncement {
-  id: string;
-  title: string;
-  content: string;
-  createdAt: string;
-  eventId?: string;
+function formatRelativeTime(isoStr: string): string {
+  if (!isoStr) return '';
+  try {
+    const d = new Date(isoStr);
+    const now = new Date();
+    const diffMs = now.getTime() - d.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) {
+      const hours = d.getHours().toString().padStart(2, '0');
+      const mins = d.getMinutes().toString().padStart(2, '0');
+      return `Hari ini, ${hours}:${mins}`;
+    } else if (diffDays === 1) {
+      const hours = d.getHours().toString().padStart(2, '0');
+      const mins = d.getMinutes().toString().padStart(2, '0');
+      return `Kemarin, ${hours}:${mins}`;
+    } else {
+      return `${diffDays} Hari lalu`;
+    }
+  } catch {
+    return isoStr;
+  }
+}
+
+function getAnnouncementIcon(index: number): { name: any; bg: string; color: string } {
+  const icons = [
+    { name: 'megaphone', bg: '#FEE2E2', color: '#B81414' },
+    { name: 'time', bg: '#FEF3C7', color: '#D97706' },
+    { name: 'people', bg: '#D1FAE5', color: '#059669' },
+    { name: 'information-circle', bg: '#E0E7FF', color: '#4F46E5' },
+  ];
+  return icons[index % icons.length];
 }
 
 export default function HomeScreen() {
   const { user, logout } = useAuth();
   const studentName = user?.student?.name || user?.email?.split('@')[0] || 'Siswa';
-  const classLabel = user?.student?.class ? `${user.student.class.grade} ${user.student.class.name}` : (user?.role || 'Siswa');
+  const classLabel = user?.student?.class
+    ? `${user.student.class.grade} ${user.student.class.name}`
+    : user?.role || 'Siswa';
 
-  const [banners, setBanners] = useState<RealEvent[]>([]);
-  const [announcements, setAnnouncements] = useState<RealAnnouncement[]>([]);
-  const [loadingEvents, setLoadingEvents] = useState(true);
-  const [loadingAnnouncements, setLoadingAnnouncements] = useState(true);
+  const [managedEvents, setManagedEvents] = useState<EventItem[]>([]);
+  const [generalEvents, setGeneralEvents] = useState<EventItem[]>([]);
+  const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
-  useEffect(() => {
-    async function fetchData() {
-      // Fetch Events
-      try {
-        setLoadingEvents(true);
-        const res: any = await api.get('/events?limit=5');
-        const list = Array.isArray(res) ? res : res?.data || [];
-        setBanners(list);
-      } catch (err) {
-        console.warn('Error fetching events in Home:', err);
-      } finally {
-        setLoadingEvents(false);
+  const isCommittee = managedEvents.length > 0;
+
+  const loadData = useCallback(async () => {
+    try {
+      const [managedRes, eventsRes, annRes] = await Promise.allSettled([
+        getManagedEventsForStudent(user?.student?.id, user?.id),
+        api.get('/events?limit=5'),
+        getAnnouncements(1, 4),
+      ]);
+
+      if (managedRes.status === 'fulfilled') {
+        setManagedEvents(managedRes.value);
       }
 
-      // Fetch Announcements
-      try {
-        setLoadingAnnouncements(true);
-        const resAnn: any = await api.get('/announcements?limit=5');
-        const annList = Array.isArray(resAnn) ? resAnn : resAnn?.data || [];
-        setAnnouncements(annList);
-      } catch (err) {
-        console.warn('Error fetching announcements in Home:', err);
-      } finally {
-        setLoadingAnnouncements(false);
+      if (eventsRes.status === 'fulfilled') {
+        const raw = eventsRes.value;
+        const list = Array.isArray(raw) ? raw : (raw as any)?.data || [];
+        setGeneralEvents(list);
       }
+
+      if (annRes.status === 'fulfilled') {
+        setAnnouncements(annRes.value.data);
+      }
+    } catch (err) {
+      console.warn('Error fetching home data:', err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
+  }, [user?.student?.id, user?.id]);
 
-    fetchData();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
+      loadData();
+    }, [loadData])
+  );
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadData();
+  };
 
   const handleLogout = async () => {
     setShowLogoutModal(false);
     await logout();
   };
 
-  const formatDate = (dateStr?: string) => {
-    if (!dateStr) return '-';
-    try {
-      const d = new Date(dateStr);
-      return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
-    } catch (e) {
-      return dateStr;
-    }
-  };
+  const managedEventNames = managedEvents.map((e) => e.name).join(', ');
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView
-        style={styles.scrollContainer}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* TOP PROFILE CARD HEADER */}
-        <View style={styles.profileCard}>
-          <View style={styles.avatarBorder}>
-            <Image
-              source={{
-                uri: user?.student?.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80',
-              }}
-              style={styles.avatarImage}
-            />
+      {/* ─── CASE 1: SISWA IS A COMMITTEE MEMBER (DASHBOARD KOMITE EVENT - Screenshot 4) ─── */}
+      {isCommittee ? (
+        <>
+          {/* Header */}
+          <View style={styles.header}>
+            <View style={styles.headerProfile}>
+              {user?.student?.avatarUrl ? (
+                <Image source={{ uri: user.student.avatarUrl }} style={styles.avatarImg} />
+              ) : (
+                <View style={styles.avatarCircle}>
+                  <Text style={styles.avatarInitial}>{studentName.charAt(0).toUpperCase()}</Text>
+                </View>
+              )}
+              <View style={styles.headerTextCol}>
+                <Text style={styles.headerBrand}>Moklet Event Center</Text>
+                <Text style={styles.headerSub}>Dashboard Komite event</Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={styles.logoutBtn}
+              activeOpacity={0.7}
+              onPress={() => setShowLogoutModal(true)}
+            >
+              <Ionicons name="log-out-outline" size={22} color="#78909C" />
+            </TouchableOpacity>
           </View>
-          <View style={styles.profileTextContainer}>
-            <Text style={styles.profileName} numberOfLines={1}>
-              {studentName}
-            </Text>
-            <Text style={styles.profileSubtitle} numberOfLines={1}>
-              {classLabel}
-            </Text>
-          </View>
-          <TouchableOpacity
-            style={styles.logoutIconButton}
-            activeOpacity={0.7}
-            onPress={() => setShowLogoutModal(true)}
-          >
-            <Ionicons name="exit-outline" size={24} color="#3D2723" />
-          </TouchableOpacity>
-        </View>
 
-        {/* EVENT BANNER SECTION */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Event Terdekat</Text>
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => router.push('/(tabs)/events')}
-          >
-            <Text style={styles.sectionLink}>Lihat Semua →</Text>
-          </TouchableOpacity>
-        </View>
-
-        {loadingEvents ? (
-          <View style={styles.loaderContainer}>
-            <ActivityIndicator size="small" color={Colors.primary} />
-            <Text style={styles.loaderText}>Memuat event...</Text>
-          </View>
-        ) : banners.length > 0 ? (
           <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            decelerationRate="fast"
-            snapToInterval={BANNER_WIDTH + Spacing.md}
-            contentContainerStyle={styles.bannerContainer}
+            contentContainerStyle={styles.scroll}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={[Colors.primary]}
+              />
+            }
           >
-            {banners.map((banner) => (
-              <TouchableOpacity
-                key={banner.id}
-                style={[styles.bannerCard, { width: BANNER_WIDTH }]}
-                activeOpacity={0.93}
-                onPress={() => router.push({ pathname: '/event-detail', params: { eventId: banner.id } })}
-              >
-                <Image
-                  source={{
-                    uri: banner.bannerUrl || 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=800&q=80',
-                  }}
-                  style={styles.bannerImage}
-                />
-                {/* Dark overlay */}
-                <View style={styles.bannerOverlay} />
-                {/* Tag */}
-                <View style={styles.bannerTag}>
-                  <Text style={styles.bannerTagText}>{banner.status || 'EVENT'}</Text>
+            {loading ? (
+              <View style={styles.loaderBox}>
+                <ActivityIndicator size="large" color={Colors.primary} />
+              </View>
+            ) : (
+              <>
+                {/* Welcome Card */}
+                <View style={styles.welcomeCard}>
+                  <Text style={styles.greeting}>Halo, {studentName}</Text>
+                  <Text style={styles.subtitle}>
+                    Selamat datang dan selamat bekerja. Kamu jadi anggota komite event [
+                    {managedEventNames}].
+                  </Text>
                 </View>
-                {/* Bottom info */}
-                <View style={styles.bannerBottom}>
-                  <Text style={styles.bannerTitle} numberOfLines={1}>{banner.name}</Text>
-                  <View style={styles.bannerMeta}>
-                    <Ionicons name="calendar-outline" size={12} color="rgba(255,255,255,0.85)" />
-                    <Text style={styles.bannerMetaText}>{formatDate(banner.eventDate)}</Text>
+
+                {/* Section: Event yang Dikelola */}
+                <View style={styles.sectionHeaderRow}>
+                  <Text style={styles.sectionTitle}>Event yang Dikelola</Text>
+                </View>
+
+                {managedEvents.map((ev) => {
+                  const isOngoing = ev.status === 'ONGOING';
+                  return (
+                    <View key={ev.id} style={styles.eventCard}>
+                      <View style={styles.bannerWrapper}>
+                        <Image
+                          source={{
+                            uri:
+                              ev.bannerUrl ||
+                              'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800&q=80',
+                          }}
+                          style={styles.eventBanner}
+                        />
+                        <View
+                          style={[
+                            styles.statusBadgeOverlay,
+                            isOngoing ? styles.statusOngoing : styles.statusClosed,
+                          ]}
+                        >
+                          <View
+                            style={[
+                              styles.statusDot,
+                              { backgroundColor: isOngoing ? '#22C55E' : '#9E9E9E' },
+                            ]}
+                          />
+                          <Text
+                            style={[
+                              styles.statusText,
+                              { color: isOngoing ? '#166534' : '#424242' },
+                            ]}
+                          >
+                            {isOngoing ? 'Sedang Berjalan' : 'Selesai'}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.eventBody}>
+                        <Text style={styles.eventName}>{ev.name}</Text>
+                        <View style={styles.dateRow}>
+                          <Ionicons name="calendar-outline" size={13} color="#757575" />
+                          <Text style={styles.dateText}>{formatDate(ev.eventDate)}</Text>
+                        </View>
+
+                        <View style={styles.eventBottomRow}>
+                          <View>
+                            <Text style={styles.pendaftarLabel}>Total Pendaftar</Text>
+                            <Text style={styles.pendaftarVal}>
+                              {ev.totalRegistrations !== undefined && ev.totalRegistrations > 0
+                                ? `${ev.totalRegistrations} Tim`
+                                : `${ev.totalCategories || 0} Cabang Lomba`}
+                            </Text>
+                          </View>
+                          <TouchableOpacity
+                            style={styles.kelolaBtn}
+                            activeOpacity={0.85}
+                            onPress={() =>
+                              router.push({
+                                pathname: '/(panitia)/events/[id]',
+                                params: { id: ev.id },
+                              } as any)
+                            }
+                          >
+                            <Text style={styles.kelolaBtnText}>Kelola</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })}
+
+                {/* Section: Pengumuman Terbaru */}
+                <View style={styles.sectionHeaderRow}>
+                  <Text style={styles.sectionTitle}>Pengumuman Terbaru</Text>
+                  <TouchableOpacity onPress={() => router.push('/(tabs)/info')}>
+                    <Text style={styles.seeAllText}>Lihat Semua →</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {announcements.length > 0 ? (
+                  announcements.map((ann, index) => {
+                    const iconInfo = getAnnouncementIcon(index);
+                    return (
+                      <View key={ann.id} style={styles.announcementCard}>
+                        <View style={[styles.annIconBox, { backgroundColor: iconInfo.bg }]}>
+                          <Ionicons name={iconInfo.name} size={20} color={iconInfo.color} />
+                        </View>
+                        <View style={styles.annContent}>
+                          <Text style={styles.annTitle} numberOfLines={1}>
+                            {ann.title}
+                          </Text>
+                          <Text style={styles.annBody} numberOfLines={2}>
+                            {ann.content}
+                          </Text>
+                          <Text style={styles.annTime}>{formatRelativeTime(ann.createdAt)}</Text>
+                        </View>
+                      </View>
+                    );
+                  })
+                ) : (
+                  <View style={styles.emptyBoxSmall}>
+                    <Text style={styles.emptySubtitle}>Belum ada pengumuman terbaru.</Text>
                   </View>
-                </View>
-              </TouchableOpacity>
-            ))}
+                )}
+              </>
+            )}
           </ScrollView>
-        ) : (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>Belum ada event tersedia saat ini.</Text>
+        </>
+      ) : (
+        /* ─── CASE 2: REGULAR SISWA (NOT A COMMITTEE MEMBER) ─── */
+        <ScrollView
+          style={styles.scrollContainer}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[Colors.primary]}
+            />
+          }
+        >
+          {/* Top Profile Card Header */}
+          <View style={styles.profileCard}>
+            <View style={styles.avatarBorder}>
+              <Image
+                source={{
+                  uri:
+                    user?.student?.avatarUrl ||
+                    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80',
+                }}
+                style={styles.avatarImage}
+              />
+            </View>
+            <View style={styles.profileTextContainer}>
+              <Text style={styles.profileName} numberOfLines={1}>
+                {studentName}
+              </Text>
+              <Text style={styles.profileSubtitle} numberOfLines={1}>
+                {classLabel}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.logoutIconButton}
+              activeOpacity={0.7}
+              onPress={() => setShowLogoutModal(true)}
+            >
+              <Ionicons name="exit-outline" size={24} color="#3D2723" />
+            </TouchableOpacity>
           </View>
-        )}
 
-        {/* PENGUMUMAN TERBARU SECTION */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Pengumuman Terbaru</Text>
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => router.push('/(tabs)/info')}
-          >
-            <Text style={styles.sectionLink}>Lihat Semua →</Text>
-          </TouchableOpacity>
-        </View>
-
-        {loadingAnnouncements ? (
-          <View style={styles.loaderContainer}>
-            <ActivityIndicator size="small" color={Colors.primary} />
-            <Text style={styles.loaderText}>Memuat pengumuman...</Text>
+          {/* Event Banner Section */}
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Event Terdekat</Text>
+            <TouchableOpacity activeOpacity={0.7} onPress={() => router.push('/(tabs)/events')}>
+              <Text style={styles.sectionLink}>Lihat Semua →</Text>
+            </TouchableOpacity>
           </View>
-        ) : announcements.length > 0 ? (
-          <View style={styles.announceList}>
-            {announcements.map((ann) => (
-              <TouchableOpacity key={ann.id} style={styles.annCard} activeOpacity={0.85}>
-                <View style={[styles.annDot, { backgroundColor: '#FFEBEE' }]}>
-                  <View style={[styles.annDotInner, { backgroundColor: Colors.primary }]} />
+
+          {loading ? (
+            <View style={styles.loaderContainer}>
+              <ActivityIndicator size="small" color={Colors.primary} />
+              <Text style={styles.loaderText}>Memuat event...</Text>
+            </View>
+          ) : generalEvents.length > 0 ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              decelerationRate="fast"
+              snapToInterval={BANNER_WIDTH + Spacing.md}
+              contentContainerStyle={styles.bannerContainer}
+            >
+              {generalEvents.map((banner) => (
+                <TouchableOpacity
+                  key={banner.id}
+                  style={[styles.bannerCard, { width: BANNER_WIDTH }]}
+                  activeOpacity={0.93}
+                  onPress={() =>
+                    router.push({ pathname: '/event-detail', params: { eventId: banner.id } })
+                  }
+                >
+                  <Image
+                    source={{
+                      uri:
+                        banner.bannerUrl ||
+                        'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=800&q=80',
+                    }}
+                    style={styles.bannerImage}
+                  />
+                  <View style={styles.bannerOverlay} />
+                  <View style={styles.bannerTag}>
+                    <Text style={styles.bannerTagText}>{banner.status || 'EVENT'}</Text>
+                  </View>
+                  <View style={styles.bannerBottom}>
+                    <Text style={styles.bannerTitle} numberOfLines={1}>
+                      {banner.name}
+                    </Text>
+                    <View style={styles.bannerMeta}>
+                      <Ionicons name="calendar-outline" size={12} color="rgba(255,255,255,0.85)" />
+                      <Text style={styles.bannerMetaText}>{formatDate(banner.eventDate)}</Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          ) : (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>Belum ada event tersedia saat ini.</Text>
+            </View>
+          )}
+
+          {/* Pengumuman Terbaru Section */}
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Pengumuman Terbaru</Text>
+            <TouchableOpacity activeOpacity={0.7} onPress={() => router.push('/(tabs)/info')}>
+              <Text style={styles.sectionLink}>Lihat Semua →</Text>
+            </TouchableOpacity>
+          </View>
+
+          {announcements.length > 0 ? (
+            announcements.map((ann, idx) => (
+              <View key={ann.id || idx} style={styles.newsCard}>
+                <View style={styles.newsIconBox}>
+                  <Ionicons name="megaphone" size={18} color="#B81414" />
                 </View>
-                <View style={styles.annBody}>
-                  <Text style={styles.annTitle} numberOfLines={1}>
+                <View style={styles.newsContent}>
+                  <Text style={styles.newsTitle} numberOfLines={1}>
                     {ann.title}
                   </Text>
-                  <Text style={styles.annDesc} numberOfLines={2}>
+                  <Text style={styles.newsBody} numberOfLines={2}>
                     {ann.content}
                   </Text>
-                  <View style={styles.annFooter}>
-                    <Ionicons name="calendar-outline" size={11} color={Colors.textSubtitle} />
-                    <Text style={styles.annDate}>{formatDate(ann.createdAt)}</Text>
-                  </View>
+                  <Text style={styles.newsTime}>{formatRelativeTime(ann.createdAt)}</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={16} color="#BDBDBD" />
-              </TouchableOpacity>
-            ))}
-          </View>
-        ) : (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>Belum ada pengumuman terbaru.</Text>
-          </View>
-        )}
-      </ScrollView>
+              </View>
+            ))
+          ) : (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>Belum ada pengumuman terbaru.</Text>
+            </View>
+          )}
+        </ScrollView>
+      )}
 
       {/* Logout Modal */}
       <Modal
@@ -243,32 +454,27 @@ export default function HomeScreen() {
         animationType="fade"
         onRequestClose={() => setShowLogoutModal(false)}
       >
-        <Pressable style={styles.overlay} onPress={() => setShowLogoutModal(false)}>
-          <Pressable style={styles.modal} onPress={(e) => e.stopPropagation()}>
-            <View style={styles.modalIcon}>
-              <Ionicons name="log-out-outline" size={32} color={Colors.primary} />
+        <Pressable style={styles.modalBackdrop} onPress={() => setShowLogoutModal(false)}>
+          <View style={styles.modalCard} onStartShouldSetResponder={() => true}>
+            <View style={styles.modalIconWrap}>
+              <Ionicons name="log-out-outline" size={32} color="#B81414" />
             </View>
             <Text style={styles.modalTitle}>Keluar Akun</Text>
             <Text style={styles.modalDesc}>
-              Apakah kamu yakin ingin keluar dari akun ini?
+              Apakah kamu yakin ingin keluar dari Moklet Event Center?
             </Text>
-            <View style={styles.modalButtons}>
+            <View style={styles.modalActionRow}>
               <TouchableOpacity
-                style={styles.cancelBtn}
+                style={styles.modalCancelBtn}
                 onPress={() => setShowLogoutModal(false)}
-                activeOpacity={0.8}
               >
-                <Text style={styles.cancelBtnText}>Batal</Text>
+                <Text style={styles.modalCancelText}>Batal</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.logoutBtn}
-                onPress={handleLogout}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.logoutBtnText}>Keluar</Text>
+              <TouchableOpacity style={styles.modalConfirmBtn} onPress={handleLogout}>
+                <Text style={styles.modalConfirmText}>Ya, Keluar</Text>
               </TouchableOpacity>
             </View>
-          </Pressable>
+          </View>
         </Pressable>
       </Modal>
     </SafeAreaView>
@@ -281,298 +487,376 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F7FA',
     paddingTop: Platform.OS === 'android' ? 36 : 0,
   },
-  scrollContainer: { flex: 1 },
-  scrollContent: { paddingBottom: 32 },
-
-  // Profile Card Header
-  profileCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.white,
-    borderRadius: Radius.xl,
+  header: {
+    backgroundColor: '#fff',
     paddingHorizontal: Spacing.base,
     paddingVertical: 14,
-    marginHorizontal: Spacing.xl,
-    marginTop: Spacing.md,
-    marginBottom: Spacing.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  headerProfile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  avatarImg: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+  },
+  avatarCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitial: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.primary,
+  },
+  headerTextCol: {
+    gap: 2,
+  },
+  headerBrand: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#B81414',
+  },
+  headerSub: {
+    fontSize: 12,
+    color: '#757575',
+  },
+  logoutBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scroll: {
+    padding: Spacing.base,
+    paddingBottom: 40,
+  },
+  welcomeCard: {
+    backgroundColor: '#fff',
+    borderRadius: Radius.xl,
+    padding: Spacing.xl,
+    marginBottom: Spacing.base,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 2,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
   },
-  avatarBorder: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 1.5,
-    borderColor: '#E53935',
-    padding: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarImage: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 22,
-  },
-  profileTextContainer: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  profileName: {
-    fontSize: 16,
-    fontWeight: '700',
+  greeting: {
+    fontSize: 20,
+    fontWeight: '800',
     color: '#1E1E1E',
-    marginBottom: 2,
+    marginBottom: 6,
   },
-  profileSubtitle: {
+  subtitle: {
     fontSize: 13,
     color: '#757575',
-    fontWeight: '400',
+    lineHeight: 20,
   },
-  logoutIconButton: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  // Section header
-  sectionHeader: {
+  sectionHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.md,
+    alignItems: 'center',
+    marginTop: Spacing.md,
+    marginBottom: Spacing.sm,
+    paddingHorizontal: 2,
   },
   sectionTitle: {
-    fontSize: 17,
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#1E1E1E',
+  },
+  seeAllText: {
+    fontSize: 13,
     fontWeight: '700',
-    color: Colors.textMain,
+    color: '#B81414',
   },
-  sectionLink: {
-    fontSize: 13,
-    color: Colors.primary,
-    fontWeight: '600',
-  },
-
-  // Loaders & Empty
-  loaderContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 32,
-    gap: 8,
-  },
-  loaderText: {
-    fontSize: 13,
-    color: Colors.textSubtitle,
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 24,
-    paddingHorizontal: Spacing.xl,
-  },
-  emptyText: {
-    fontSize: 13,
-    color: Colors.textSubtitle,
-  },
-
-  // Banners
-  bannerContainer: {
-    paddingHorizontal: Spacing.xl,
-    gap: Spacing.md,
-  },
-  bannerCard: {
-    height: 200,
+  eventCard: {
+    backgroundColor: '#fff',
     borderRadius: Radius.xl,
+    marginBottom: Spacing.base,
     overflow: 'hidden',
-    position: 'relative',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.18,
-    shadowRadius: 10,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  bannerImage: {
+  bannerWrapper: {
+    width: '100%',
+    height: 150,
+    position: 'relative',
+  },
+  eventBanner: {
     width: '100%',
     height: '100%',
-    position: 'absolute',
   },
-  bannerOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.42)',
-  },
-  bannerTag: {
+  statusBadgeOverlay: {
     position: 'absolute',
-    top: Spacing.md,
-    left: Spacing.md,
-    backgroundColor: Colors.primary,
+    top: 10,
+    right: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: Radius.round,
   },
-  bannerTagText: {
-    color: Colors.white,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5,
+  statusOngoing: {
+    backgroundColor: 'rgba(220, 252, 231, 0.95)',
   },
-  bannerBottom: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+  statusClosed: {
+    backgroundColor: 'rgba(243, 244, 246, 0.95)',
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  eventBody: {
     padding: Spacing.base,
-  },
-  bannerTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: Colors.white,
-    marginBottom: 4,
-  },
-  bannerMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: 4,
   },
-  bannerMetaText: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.85)',
+  eventName: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#1E1E1E',
   },
-
-  // Announcements
-  announceList: {
-    paddingHorizontal: Spacing.xl,
-    gap: Spacing.sm,
-  },
-  annCard: {
+  dateRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.white,
+    gap: 5,
+    marginBottom: 8,
+  },
+  dateText: {
+    fontSize: 12,
+    color: '#757575',
+  },
+  eventBottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    marginTop: 4,
+  },
+  pendaftarLabel: {
+    fontSize: 11,
+    color: '#757575',
+    fontWeight: '500',
+  },
+  pendaftarVal: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#B81414',
+  },
+  kelolaBtn: {
+    backgroundColor: '#B81414',
+    paddingHorizontal: 22,
+    paddingVertical: 9,
     borderRadius: Radius.lg,
-    padding: Spacing.md,
-    gap: Spacing.md,
+  },
+  kelolaBtnText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  announcementCard: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderRadius: Radius.xl,
+    padding: Spacing.base,
+    marginBottom: Spacing.sm,
+    gap: 12,
+    alignItems: 'flex-start',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
     elevation: 1,
   },
-  annDot: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  annIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
   },
-  annDotInner: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-  },
-  annBody: {
+  annContent: {
     flex: 1,
+    gap: 3,
   },
   annTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: Colors.textMain,
-    marginBottom: 3,
+    color: '#1E1E1E',
   },
-  annDesc: {
+  annBody: {
     fontSize: 12,
-    color: Colors.textSubtitle,
-    lineHeight: 17,
-    marginBottom: 6,
+    color: '#757575',
+    lineHeight: 18,
   },
-  annFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  annDate: {
+  annTime: {
     fontSize: 11,
-    color: Colors.textSubtitle,
-    fontWeight: '500',
+    color: '#9E9E9E',
+    marginTop: 2,
+  },
+  loaderBox: {
+    paddingVertical: 60,
+    alignItems: 'center',
+  },
+  emptyBoxSmall: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  emptySubtitle: {
+    fontSize: 13,
+    color: '#9E9E9E',
+    textAlign: 'center',
   },
 
-  // Modal
-  overlay: {
-    flex: 1,
-    backgroundColor: Colors.overlay,
+  // Regular Siswa Styles
+  scrollContainer: { flex: 1 },
+  scrollContent: { padding: Spacing.base, paddingBottom: 40 },
+  profileCard: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: Spacing.xl,
-  },
-  modal: {
-    backgroundColor: Colors.white,
-    borderRadius: 24,
-    padding: Spacing.xl,
-    width: '100%',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  modalIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: Colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: '#fff',
+    borderRadius: Radius.xl,
+    padding: Spacing.base,
     marginBottom: Spacing.base,
+    gap: Spacing.md,
+    elevation: 1,
   },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: Colors.textMain,
+  avatarBorder: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    overflow: 'hidden',
+  },
+  avatarImage: { width: '100%', height: '100%' },
+  profileTextContainer: { flex: 1 },
+  profileName: { fontSize: 16, fontWeight: '800', color: '#1E1E1E' },
+  profileSubtitle: { fontSize: 12, color: '#757575', marginTop: 2 },
+  logoutIconButton: { padding: 6 },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: Spacing.sm,
     marginBottom: Spacing.sm,
   },
-  modalDesc: {
-    fontSize: 14,
-    color: Colors.textSubtitle,
-    textAlign: 'center',
-    lineHeight: 21,
-    marginBottom: Spacing.xl,
+  sectionLink: { fontSize: 13, color: '#B81414', fontWeight: '700' },
+  bannerContainer: { gap: Spacing.md, paddingVertical: 4 },
+  bannerCard: {
+    height: 180,
+    borderRadius: Radius.xl,
+    overflow: 'hidden',
+    backgroundColor: '#E0E0E0',
   },
-  modalButtons: {
+  bannerImage: { width: '100%', height: '100%' },
+  bannerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  bannerTag: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    backgroundColor: '#B81414',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: Radius.sm,
+  },
+  bannerTagText: { color: '#fff', fontSize: 10, fontWeight: '800' },
+  bannerBottom: {
+    position: 'absolute',
+    bottom: 12,
+    left: 12,
+    right: 12,
+    gap: 4,
+  },
+  bannerTitle: { color: '#fff', fontSize: 16, fontWeight: '800' },
+  bannerMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  bannerMetaText: { color: 'rgba(255,255,255,0.85)', fontSize: 11 },
+  loaderContainer: { paddingVertical: 30, alignItems: 'center', gap: 8 },
+  loaderText: { fontSize: 12, color: '#757575' },
+  emptyContainer: { paddingVertical: 20, alignItems: 'center' },
+  emptyText: { fontSize: 13, color: '#9E9E9E' },
+  newsCard: {
     flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderRadius: Radius.xl,
+    padding: Spacing.base,
+    marginBottom: Spacing.sm,
     gap: Spacing.md,
+    alignItems: 'center',
+  },
+  newsIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  newsContent: { flex: 1, gap: 2 },
+  newsTitle: { fontSize: 14, fontWeight: '700', color: '#1E1E1E' },
+  newsBody: { fontSize: 12, color: '#757575', lineHeight: 17 },
+  newsTime: { fontSize: 10, color: '#9E9E9E', marginTop: 2 },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: Spacing.xl,
+  },
+  modalCard: {
     width: '100%',
-  },
-  cancelBtn: {
-    flex: 1,
-    paddingVertical: 13,
-    borderRadius: Radius.round,
-    borderWidth: 1.5,
-    borderColor: '#E0E0E0',
+    backgroundColor: '#fff',
+    borderRadius: Radius.xl,
+    padding: Spacing.xl,
     alignItems: 'center',
+    gap: 12,
   },
-  cancelBtnText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.textMain,
-  },
-  logoutBtn: {
-    flex: 1,
-    paddingVertical: 13,
-    borderRadius: Radius.round,
-    backgroundColor: Colors.primary,
+  modalIconWrap: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#FEE2E2',
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  logoutBtnText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.white,
+  modalTitle: { fontSize: 18, fontWeight: '800', color: '#1E1E1E' },
+  modalDesc: { fontSize: 13, color: '#757575', textAlign: 'center' },
+  modalActionRow: { flexDirection: 'row', gap: Spacing.md, width: '100%', marginTop: 8 },
+  modalCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderRadius: Radius.lg,
+    backgroundColor: '#F1F5F9',
   },
+  modalCancelText: { fontSize: 14, fontWeight: '700', color: '#475569' },
+  modalConfirmBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderRadius: Radius.lg,
+    backgroundColor: '#B81414',
+  },
+  modalConfirmText: { fontSize: 14, fontWeight: '700', color: '#fff' },
 });
