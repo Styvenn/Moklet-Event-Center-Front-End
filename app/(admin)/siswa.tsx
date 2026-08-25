@@ -15,6 +15,8 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   RefreshControl,
+  PanResponder,
+  Animated,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,7 +28,8 @@ import {
   importStudentsExcel,
   StudentItem,
 } from '../../services/admin/students.service';
-import { getClasses, ClassItem, GradeOption } from '../../services/admin/classes.service';
+import { getClasses, ClassItem } from '../../services/admin/classes.service';
+import { getErrorMessage } from '../../services/api';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -34,6 +37,52 @@ const AVATAR_COLORS = ['#EF9A9A', '#CE93D8', '#90CAF9', '#A5D6A7', '#FFE082', '#
 function avatarColor(name: string) {
   const idx = name.charCodeAt(0) % AVATAR_COLORS.length;
   return AVATAR_COLORS[idx];
+}
+
+// ─── Hook: Drag To Close ───────────────────────────────────────────────────────
+
+const DRAG_DISMISS_THRESHOLD = 80;
+const DRAG_MAX_OPACITY = 300; // px sebelum overlay = transparan penuh
+
+function useDragToClose(onClose: () => void) {
+  const translateY = useRef(new Animated.Value(0)).current;
+
+  // Overlay opacity: sinkron dengan drag — makin ke bawah makin transparan
+  const overlayOpacity = translateY.interpolate({
+    inputRange: [0, DRAG_MAX_OPACITY],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 2,
+      onPanResponderMove: (_, gs) => {
+        if (gs.dy > 0) translateY.setValue(gs.dy);
+      },
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dy > DRAG_DISMISS_THRESHOLD) {
+          Animated.timing(translateY, {
+            toValue: 700,
+            duration: 200,
+            useNativeDriver: true,
+          }).start(() => {
+            translateY.setValue(0);
+            onClose();
+          });
+        } else {
+          Animated.spring(translateY, {
+            toValue: 0,
+            useNativeDriver: true,
+            bounciness: 4,
+          }).start();
+        }
+      },
+    })
+  ).current;
+
+  return { translateY, overlayOpacity, panResponder };
 }
 
 // ─── Modal Tambah Siswa ────────────────────────────────────────────────────────
@@ -49,164 +98,163 @@ function AddStudentModal({ visible, classes, onClose, onSuccess }: AddStudentMod
   const [name, setName] = useState('');
   const [nis, setNis] = useState('');
   const [selectedClassId, setSelectedClassId] = useState('');
-  const [angkatan, setAngkatan] = useState(''); // TODO(backend gap #3): state lokal saja
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showClassPicker, setShowClassPicker] = useState(false);
 
   const reset = () => {
-    setName(''); setNis(''); setSelectedClassId(''); setAngkatan('');
+    setName(''); setNis(''); setSelectedClassId('');
     setError(''); setShowClassPicker(false);
   };
 
   const handleClose = () => { reset(); onClose(); };
 
+  const { translateY, overlayOpacity, panResponder } = useDragToClose(handleClose);
+
   const selectedClass = classes.find((c) => c.id === selectedClassId);
 
   const handleSubmit = async () => {
-    if (!name.trim()) { setError('Nama siswa wajib diisi.'); return; }
-    if (!nis.trim()) { setError('NIS wajib diisi.'); return; }
+    const cleanName = name.trim();
+    const cleanNis = nis.trim();
+
+    if (!cleanName) { setError('Nama siswa wajib diisi.'); return; }
+    if (!cleanNis) { setError('NIS wajib diisi.'); return; }
+    if (!/^\d+$/.test(cleanNis)) {
+      setError('NIS harus berupa angka.');
+      return;
+    }
     if (!selectedClassId) { setError('Pilih kelas terlebih dahulu.'); return; }
 
     setLoading(true);
     setError('');
     try {
-      await createStudent({ name: name.trim(), nis: nis.trim(), classId: selectedClassId });
+      await createStudent({ name: cleanName, nis: cleanNis, classId: selectedClassId });
       reset();
       onSuccess();
     } catch (e: any) {
-      setError(e?.message || 'Gagal menambah siswa. Coba lagi.');
+      setError(getErrorMessage(e, 'Gagal menambah siswa. Pastikan NIS belum terdaftar di sistem.'));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
-      <View style={ms.overlay}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={{ width: '100%' }}
-        >
-          <View style={ms.sheet}>
-            {/* Handle */}
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      statusBarTranslucent
+      onRequestClose={handleClose}
+    >
+      {/* Overlay dengan opacity sinkron terhadap drag */}
+      <Animated.View style={[ms.overlay, { opacity: overlayOpacity }]} />
+
+      {/* Sheet container — tidak ikut opacity agar konten tetap terlihat */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={ms.sheetContainer}
+        pointerEvents="box-none"
+      >
+        <Animated.View style={[ms.sheet, { transform: [{ translateY }] }]}>
+          {/* Handle — draggable */}
+          <View {...panResponder.panHandlers} style={ms.handleArea}>
             <View style={ms.handle} />
+          </View>
 
-            {/* Header */}
-            <View style={ms.sheetHeader}>
-              <Text style={ms.sheetTitle}>Tambah Siswa</Text>
-              <TouchableOpacity onPress={handleClose}>
-                <Ionicons name="close" size={24} color="#607D8B" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Nama */}
-              <Text style={ms.label}>Nama Lengkap *</Text>
-              <TextInput
-                style={ms.input}
-                placeholder="Contoh: Budi Santoso"
-                placeholderTextColor="#9E9E9E"
-                value={name}
-                onChangeText={setName}
-              />
-
-              {/* NIS */}
-              <Text style={ms.label}>NIS *</Text>
-              <TextInput
-                style={ms.input}
-                placeholder="Contoh: 2223456789"
-                placeholderTextColor="#9E9E9E"
-                keyboardType="numeric"
-                value={nis}
-                onChangeText={setNis}
-              />
-
-              {/* Angkatan — TODO(backend gap #3) */}
-              <View style={ms.labelRow}>
-                <Text style={ms.label}>Angkatan</Text>
-                <View style={ms.pendingBadge}>
-                  <Text style={ms.pendingBadgeText}>Menunggu update backend</Text>
-                </View>
-              </View>
-              <TextInput
-                style={[ms.input, ms.inputDisabled]}
-                placeholder="Contoh: 2022 (belum tersimpan ke server)"
-                placeholderTextColor="#BDBDBD"
-                keyboardType="numeric"
-                value={angkatan}
-                onChangeText={setAngkatan}
-                editable
-              />
-              <Text style={ms.hintText}>
-                ⓘ Field ini disimpan sementara di device; akan dikirim ke server setelah backend mendukungnya.
-              </Text>
-
-              {/* Kelas */}
-              <Text style={ms.label}>Kelas *</Text>
-              <TouchableOpacity
-                style={ms.pickerBtn}
-                onPress={() => setShowClassPicker((v) => !v)}
-              >
-                <Text style={selectedClass ? ms.pickerBtnText : ms.pickerBtnPlaceholder}>
-                  {selectedClass ? `${selectedClass.grade} - ${selectedClass.name}` : 'Pilih Kelas...'}
-                </Text>
-                <Ionicons
-                  name={showClassPicker ? 'chevron-up' : 'chevron-down'}
-                  size={18}
-                  color="#9E9E9E"
-                />
-              </TouchableOpacity>
-
-              {showClassPicker && (
-                <View style={ms.classList}>
-                  {classes.length === 0 ? (
-                    <Text style={ms.classEmpty}>Belum ada kelas. Tambah kelas di menu Akademik.</Text>
-                  ) : (
-                    classes.map((c) => (
-                      <TouchableOpacity
-                        key={c.id}
-                        style={[
-                          ms.classOption,
-                          c.id === selectedClassId && ms.classOptionActive,
-                        ]}
-                        onPress={() => { setSelectedClassId(c.id); setShowClassPicker(false); }}
-                      >
-                        <Text
-                          style={[
-                            ms.classOptionText,
-                            c.id === selectedClassId && ms.classOptionTextActive,
-                          ]}
-                        >
-                          {c.grade} — {c.name}
-                        </Text>
-                        {c.id === selectedClassId && (
-                          <Ionicons name="checkmark-circle" size={18} color={Colors.primary} />
-                        )}
-                      </TouchableOpacity>
-                    ))
-                  )}
-                </View>
-              )}
-
-              {error ? <Text style={ms.errorText}>{error}</Text> : null}
-            </ScrollView>
-
-            {/* Submit */}
-            <TouchableOpacity
-              style={[ms.submitBtn, loading && { opacity: 0.6 }]}
-              onPress={handleSubmit}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={ms.submitBtnText}>Simpan Siswa</Text>
-              )}
+          {/* Header */}
+          <View style={ms.sheetHeader}>
+            <Text style={ms.sheetTitle}>Tambah Siswa</Text>
+            <TouchableOpacity onPress={handleClose}>
+              <Ionicons name="close" size={24} color="#607D8B" />
             </TouchableOpacity>
           </View>
-        </KeyboardAvoidingView>
-      </View>
+
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {/* Nama */}
+            <Text style={ms.label}>Nama Lengkap *</Text>
+            <TextInput
+              style={ms.input}
+              placeholder="Contoh: Budi Santoso"
+              placeholderTextColor="#9E9E9E"
+              value={name}
+              onChangeText={setName}
+            />
+
+            {/* NIS */}
+            <Text style={ms.label}>NIS *</Text>
+            <TextInput
+              style={ms.input}
+              placeholder="Contoh: 2223456789"
+              placeholderTextColor="#9E9E9E"
+              keyboardType="numeric"
+              value={nis}
+              onChangeText={setNis}
+            />
+
+            {/* Kelas */}
+            <Text style={ms.label}>Kelas *</Text>
+            <TouchableOpacity
+              style={ms.pickerBtn}
+              onPress={() => setShowClassPicker((v) => !v)}
+            >
+              <Text style={selectedClass ? ms.pickerBtnText : ms.pickerBtnPlaceholder}>
+                {selectedClass ? `${selectedClass.grade} - ${selectedClass.name}` : 'Pilih Kelas...'}
+              </Text>
+              <Ionicons
+                name={showClassPicker ? 'chevron-up' : 'chevron-down'}
+                size={18}
+                color="#9E9E9E"
+              />
+            </TouchableOpacity>
+
+            {showClassPicker && (
+              <View style={ms.classList}>
+                {classes.length === 0 ? (
+                  <Text style={ms.classEmpty}>Belum ada kelas. Tambah kelas di menu Akademik.</Text>
+                ) : (
+                  classes.map((c) => (
+                    <TouchableOpacity
+                      key={c.id}
+                      style={[
+                        ms.classOption,
+                        c.id === selectedClassId && ms.classOptionActive,
+                      ]}
+                      onPress={() => { setSelectedClassId(c.id); setShowClassPicker(false); }}
+                    >
+                      <Text
+                        style={[
+                          ms.classOptionText,
+                          c.id === selectedClassId && ms.classOptionTextActive,
+                        ]}
+                      >
+                        {c.grade} — {c.name}
+                      </Text>
+                      {c.id === selectedClassId && (
+                        <Ionicons name="checkmark-circle" size={18} color={Colors.primary} />
+                      )}
+                    </TouchableOpacity>
+                  ))
+                )}
+              </View>
+            )}
+
+            {error ? <Text style={ms.errorText}>{error}</Text> : null}
+          </ScrollView>
+
+          {/* Submit */}
+          <TouchableOpacity
+            style={[ms.submitBtn, loading && { opacity: 0.6 }]}
+            onPress={handleSubmit}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={ms.submitBtnText}>Simpan Siswa</Text>
+            )}
+          </TouchableOpacity>
+        </Animated.View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -227,6 +275,8 @@ function UploadExcelModal({ visible, onClose, onSuccess }: UploadExcelModalProps
 
   const reset = () => { setFile(null); setError(''); setResult(null); };
   const handleClose = () => { reset(); onClose(); };
+
+  const { translateY, overlayOpacity, panResponder } = useDragToClose(handleClose);
 
   const pickFile = async () => {
     try {
@@ -254,17 +304,26 @@ function UploadExcelModal({ visible, onClose, onSuccess }: UploadExcelModalProps
       const res = await importStudentsExcel(file.uri, file.name, file.mimeType);
       setResult(res);
     } catch (e: any) {
-      setError(e?.message || 'Gagal mengupload file. Pastikan format file Excel (.xlsx) benar.');
+      setError(getErrorMessage(e, 'Gagal mengupload file. Pastikan format file Excel (.xlsx) benar.'));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
-      <View style={ms.overlay}>
-        <View style={ms.sheet}>
-          <View style={ms.handle} />
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      statusBarTranslucent
+      onRequestClose={handleClose}
+    >
+      <Animated.View style={[ms.overlay, { opacity: overlayOpacity }]} />
+      <View style={ms.sheetContainer} pointerEvents="box-none">
+        <Animated.View style={[ms.sheet, { transform: [{ translateY }] }]}>
+          <View {...panResponder.panHandlers} style={ms.handleArea}>
+            <View style={ms.handle} />
+          </View>
           <View style={ms.sheetHeader}>
             <Text style={ms.sheetTitle}>Upload Data Siswa (Excel)</Text>
             <TouchableOpacity onPress={handleClose}>
@@ -341,7 +400,7 @@ function UploadExcelModal({ visible, onClose, onSuccess }: UploadExcelModalProps
               </TouchableOpacity>
             </>
           )}
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );
@@ -351,6 +410,7 @@ function UploadExcelModal({ visible, onClose, onSuccess }: UploadExcelModalProps
 
 export default function SiswaScreen() {
   const [students, setStudents] = useState<StudentItem[]>([]);
+  const [totalFromServer, setTotalFromServer] = useState(0);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -366,6 +426,8 @@ export default function SiswaScreen() {
 
     if (studentsResult.status === 'fulfilled') {
       setStudents(studentsResult.value.data);
+      // Gunakan meta.total dari server sebagai angka resmi
+      setTotalFromServer(studentsResult.value.meta.total);
     } else {
       console.warn('Gagal memuat data siswa:', studentsResult.reason);
     }
@@ -388,7 +450,7 @@ export default function SiswaScreen() {
 
   const onRefresh = () => { setRefreshing(true); fetchAll(); };
 
-  // Client-side search filter — TODO(backend gap #4): ganti ke server-side setelah backend mendukung ?search=
+  // Client-side search filter
   const filtered = students.filter((s) => {
     const q = search.toLowerCase();
     return (
@@ -411,8 +473,9 @@ export default function SiswaScreen() {
             try {
               await deleteStudent(student.id);
               setStudents((prev) => prev.filter((s) => s.id !== student.id));
+              setTotalFromServer((prev) => Math.max(0, prev - 1));
             } catch (e: any) {
-              Alert.alert('Gagal', e?.message || 'Tidak dapat menghapus siswa.');
+              Alert.alert('Gagal', getErrorMessage(e, 'Tidak dapat menghapus data siswa.'));
             }
           },
         },
@@ -483,12 +546,10 @@ export default function SiswaScreen() {
         )}
       </View>
 
-      {/* Note: filter client-side */}
       <Text style={styles.searchNote}>
-        {/* TODO(backend gap #4): search server-side belum tersedia */}
-        {students.length > 0 && search.length > 0
-          ? `${filtered.length} dari ${students.length} siswa`
-          : `${students.length} siswa terdaftar`}
+        {search.length > 0
+          ? `${filtered.length} dari ${totalFromServer} siswa`
+          : `${totalFromServer} siswa terdaftar`}
       </Text>
 
       {loading ? (
@@ -681,8 +742,13 @@ const styles = StyleSheet.create({
 // Modal styles
 const ms = StyleSheet.create({
   overlay: {
-    flex: 1,
+    // Backdrop gelap yang opacity-nya disinkronkan dengan drag
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  sheetContainer: {
+    // Container transparan yang align sheet ke bawah
+    flex: 1,
     justifyContent: 'flex-end',
   },
   sheet: {
@@ -692,31 +758,29 @@ const ms = StyleSheet.create({
     padding: Spacing.base,
     maxHeight: '90%',
   },
+  handleArea: {
+    alignItems: 'center',
+    paddingVertical: 8,
+    marginTop: -8,
+    marginHorizontal: -Spacing.base,
+  },
   handle: {
     width: 40,
     height: 4,
     backgroundColor: '#E0E0E0',
     borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: Spacing.md,
   },
   sheetHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: Spacing.base,
+    marginTop: 4,
   },
   sheetTitle: {
     fontSize: 18,
     fontWeight: '800',
     color: '#1E1E1E',
-  },
-  labelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 6,
-    marginTop: Spacing.md,
   },
   label: {
     fontSize: 13,
@@ -725,19 +789,6 @@ const ms = StyleSheet.create({
     marginTop: Spacing.md,
     marginBottom: 6,
   },
-  pendingBadge: {
-    backgroundColor: '#FFF9C4',
-    borderRadius: Radius.round,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderWidth: 1,
-    borderColor: '#F9A825',
-  },
-  pendingBadgeText: {
-    fontSize: 10,
-    color: '#F57F17',
-    fontWeight: '600',
-  },
   input: {
     backgroundColor: '#F5F5F5',
     borderRadius: Radius.lg,
@@ -745,18 +796,6 @@ const ms = StyleSheet.create({
     paddingVertical: Platform.OS === 'ios' ? 14 : 10,
     fontSize: 14,
     color: '#1E1E1E',
-  },
-  inputDisabled: {
-    borderWidth: 1,
-    borderColor: '#FFF9C4',
-    backgroundColor: '#FFFDE7',
-  },
-  hintText: {
-    fontSize: 11,
-    color: '#9E9E9E',
-    marginTop: 4,
-    marginBottom: 4,
-    fontStyle: 'italic',
   },
   pickerBtn: {
     backgroundColor: '#F5F5F5',

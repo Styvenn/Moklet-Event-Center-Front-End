@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+// app/(admin)/panitia.tsx
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,13 +12,80 @@ import {
   ActivityIndicator,
   Modal,
   KeyboardAvoidingView,
-  ScrollView,
   RefreshControl,
   Alert,
+  PanResponder,
+  Animated,
 } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius } from '../../constants/theme';
-import { createPanitia, getPanitia, togglePanitiaStatus, PanitiaItem } from '../../services/admin/panitia.service';
+import {
+  createPanitia,
+  getPanitia,
+  togglePanitiaStatus,
+  deletePanitia,
+  PanitiaItem,
+} from '../../services/admin/panitia.service';
+import { getErrorMessage } from '../../services/api';
+
+// ─── Avatar Color Helper ───────────────────────────────────────────────────────
+
+const AVATAR_COLORS = ['#EF5350', '#AB47BC', '#5C6BC0', '#26A69A', '#FFA726', '#8D6E63', '#42A5F5'];
+function getAvatarColor(identifier: string) {
+  const str = identifier || 'panitia';
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const idx = Math.abs(hash) % AVATAR_COLORS.length;
+  return AVATAR_COLORS[idx];
+}
+
+// ─── Hook: Drag To Close ───────────────────────────────────────────────────────
+
+const DRAG_DISMISS_THRESHOLD = 80;
+const DRAG_MAX_OPACITY = 300;
+
+function useDragToClose(onClose: () => void) {
+  const translateY = useRef(new Animated.Value(0)).current;
+
+  const overlayOpacity = translateY.interpolate({
+    inputRange: [0, DRAG_MAX_OPACITY],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 2,
+      onPanResponderMove: (_, gs) => {
+        if (gs.dy > 0) translateY.setValue(gs.dy);
+      },
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dy > DRAG_DISMISS_THRESHOLD) {
+          Animated.timing(translateY, {
+            toValue: 700,
+            duration: 200,
+            useNativeDriver: true,
+          }).start(() => {
+            translateY.setValue(0);
+            onClose();
+          });
+        } else {
+          Animated.spring(translateY, {
+            toValue: 0,
+            useNativeDriver: true,
+            bounciness: 4,
+          }).start();
+        }
+      },
+    })
+  ).current;
+
+  return { translateY, overlayOpacity, panResponder };
+}
 
 // ─── Modal Buat Akun Panitia ──────────────────────────────────────────────────
 
@@ -36,14 +104,31 @@ function CreatePanitiaModal({ visible, onClose, onSuccess }: CreatePanitiaModalP
   const [successMsg, setSuccessMsg] = useState('');
 
   const reset = () => {
-    setEmail(''); setPassword(''); setError(''); setSuccessMsg(''); setShowPassword(false);
+    setEmail('');
+    setPassword('');
+    setError('');
+    setSuccessMsg('');
+    setShowPassword(false);
   };
-  const handleClose = () => { reset(); onClose(); };
+  const handleClose = () => {
+    reset();
+    onClose();
+  };
+
+  const { translateY, overlayOpacity, panResponder } = useDragToClose(handleClose);
 
   const handleSubmit = async () => {
-    if (!email.trim()) { setError('Email wajib diisi.'); return; }
-    if (!password.trim() || password.length < 6) {
-      setError('Password minimal 6 karakter.');
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      setError('Email wajib diisi.');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      setError('Format email tidak valid.');
+      return;
+    }
+    if (!password.trim() || password.length < 8) {
+      setError('Password minimal 8 karakter (persyaratan server).');
       return;
     }
 
@@ -52,106 +137,115 @@ function CreatePanitiaModal({ visible, onClose, onSuccess }: CreatePanitiaModalP
     setSuccessMsg('');
 
     try {
-      const res = await createPanitia({ email: email.trim(), password });
-      setSuccessMsg(`Akun panitia berhasil dibuat untuk ${email.trim()}.`);
-
-      const newPanitia: PanitiaItem = {
-        id: res?.id || Date.now().toString(),
-        email: email.trim(),
-        role: 'PANITIA',
-        isActive: true,
-        createdAt: new Date().toISOString(),
-      };
-      onSuccess(newPanitia);
-      reset();
+      const created = await createPanitia({ email: trimmedEmail, password });
+      setSuccessMsg(`Akun panitia berhasil dibuat untuk ${trimmedEmail}.`);
+      setTimeout(() => {
+        onSuccess(created);
+        reset();
+      }, 500);
     } catch (e: any) {
-      setError(e?.message || 'Gagal membuat akun panitia. Coba lagi.');
+      setError(getErrorMessage(e, 'Gagal membuat akun panitia. Pastikan email belum pernah didaftarkan.'));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
-      <View style={ms.overlay}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={{ width: '100%' }}
-        >
-          <View style={ms.sheet}>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      statusBarTranslucent
+      onRequestClose={handleClose}
+    >
+      <Animated.View style={[ms.overlay, { opacity: overlayOpacity }]} />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={ms.sheetContainer}
+        pointerEvents="box-none"
+      >
+        <Animated.View style={[ms.sheet, { transform: [{ translateY }] }]}>
+          <View {...panResponder.panHandlers} style={ms.handleArea}>
             <View style={ms.handle} />
-            <View style={ms.sheetHeader}>
-              <Text style={ms.sheetTitle}>Buat Akun Panitia</Text>
-              <TouchableOpacity onPress={handleClose}>
-                <Ionicons name="close" size={24} color="#607D8B" />
-              </TouchableOpacity>
-            </View>
-
-            {/* Email */}
-            <Text style={ms.label}>Email *</Text>
-            <TextInput
-              style={ms.input}
-              placeholder="contoh@moklet.sch.id"
-              placeholderTextColor="#9E9E9E"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              value={email}
-              onChangeText={setEmail}
-            />
-
-            {/* Password */}
-            <Text style={ms.label}>Password *</Text>
-            <View style={ms.passwordRow}>
-              <TextInput
-                style={[ms.input, { flex: 1 }]}
-                placeholder="Min. 6 karakter"
-                placeholderTextColor="#9E9E9E"
-                secureTextEntry={!showPassword}
-                value={password}
-                onChangeText={setPassword}
-              />
-              <TouchableOpacity
-                style={ms.eyeBtn}
-                onPress={() => setShowPassword((v) => !v)}
-              >
-                <Ionicons
-                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                  size={20}
-                  color="#9E9E9E"
-                />
-              </TouchableOpacity>
-            </View>
-
-            {/* Info box */}
-            <View style={ms.infoBox}>
-              <Ionicons name="information-circle-outline" size={16} color="#1565C0" />
-              <Text style={ms.infoText}>
-                Pastikan email valid dan password diberitahukan kepada panitia yang bersangkutan secara langsung.
-              </Text>
-            </View>
-
-            {error ? <Text style={ms.errorText}>{error}</Text> : null}
-            {successMsg ? (
-              <View style={ms.successBox}>
-                <Ionicons name="checkmark-circle-outline" size={18} color="#2E7D32" />
-                <Text style={ms.successText}>{successMsg}</Text>
-              </View>
-            ) : null}
-
-            <TouchableOpacity
-              style={[ms.submitBtn, (loading || !email || !password) && { opacity: 0.6 }]}
-              onPress={handleSubmit}
-              disabled={loading || !email || !password}
-            >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={ms.submitBtnText}>Buat Akun</Text>
-              )}
+          </View>
+          <View style={ms.sheetHeader}>
+            <Text style={ms.sheetTitle}>Buat Akun Panitia</Text>
+            <TouchableOpacity onPress={handleClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close" size={24} color="#607D8B" />
             </TouchableOpacity>
           </View>
-        </KeyboardAvoidingView>
-      </View>
+
+          {/* Email */}
+          <Text style={ms.label}>Email Panitia *</Text>
+          <TextInput
+            style={ms.input}
+            placeholder="contoh: panitia@moklet.sch.id"
+            placeholderTextColor="#9E9E9E"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            value={email}
+            onChangeText={(text) => {
+              setEmail(text);
+              if (error) setError('');
+            }}
+          />
+
+          {/* Password */}
+          <Text style={ms.label}>Password * (Min. 8 karakter)</Text>
+          <View style={ms.passwordRow}>
+            <TextInput
+              style={[ms.input, { flex: 1 }]}
+              placeholder="Minimal 8 karakter"
+              placeholderTextColor="#9E9E9E"
+              secureTextEntry={!showPassword}
+              value={password}
+              onChangeText={(text) => {
+                setPassword(text);
+                if (error) setError('');
+              }}
+            />
+            <TouchableOpacity
+              style={ms.eyeBtn}
+              onPress={() => setShowPassword((v) => !v)}
+              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+            >
+              <Ionicons
+                name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                size={20}
+                color="#9E9E9E"
+              />
+            </TouchableOpacity>
+          </View>
+
+          {/* Info box */}
+          <View style={ms.infoBox}>
+            <Ionicons name="information-circle-outline" size={18} color="#1565C0" />
+            <Text style={ms.infoText}>
+              Akun panitia yang dibuat dapat langsung login ke aplikasi dengan hak akses Panitia.
+            </Text>
+          </View>
+
+          {error ? <Text style={ms.errorText}>{error}</Text> : null}
+          {successMsg ? (
+            <View style={ms.successBox}>
+              <Ionicons name="checkmark-circle-outline" size={18} color="#2E7D32" />
+              <Text style={ms.successText}>{successMsg}</Text>
+            </View>
+          ) : null}
+
+          <TouchableOpacity
+            style={[ms.submitBtn, (loading || !email.trim() || password.length < 8) && { opacity: 0.6 }]}
+            onPress={handleSubmit}
+            disabled={loading || !email.trim() || password.length < 8}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={ms.submitBtnText}>Buat Akun Panitia</Text>
+            )}
+          </TouchableOpacity>
+        </Animated.View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -160,28 +254,28 @@ function CreatePanitiaModal({ visible, onClose, onSuccess }: CreatePanitiaModalP
 
 export default function PanitiaScreen() {
   const [panitiaList, setPanitiaList] = useState<PanitiaItem[]>([]);
+  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [loadError, setLoadError] = useState(false);
   const [showModal, setShowModal] = useState(false);
 
   const fetchPanitiaList = useCallback(async () => {
     try {
-      setLoadError(false);
       const list = await getPanitia();
-      setPanitiaList(list);
+      setPanitiaList(list || []);
     } catch (e: any) {
       console.warn('Failed to fetch panitia list:', e);
-      setLoadError(true);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, []);
 
-  useEffect(() => {
-    fetchPanitiaList();
-  }, [fetchPanitiaList]);
+  useFocusEffect(
+    useCallback(() => {
+      fetchPanitiaList();
+    }, [fetchPanitiaList])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -189,9 +283,8 @@ export default function PanitiaScreen() {
   };
 
   const handlePanitiaCreated = (newPanitia: PanitiaItem) => {
-    setPanitiaList((prev) => [newPanitia, ...prev]);
-    // Refresh to get server source of truth
-    fetchPanitiaList();
+    setPanitiaList((prev) => [newPanitia, ...prev.filter((p) => p.email !== newPanitia.email)]);
+    setShowModal(false);
   };
 
   const handleToggleStatus = (item: PanitiaItem) => {
@@ -204,18 +297,16 @@ export default function PanitiaScreen() {
         {
           text: 'Ya, Ubah',
           onPress: async () => {
-            // Optimistic update
             setPanitiaList((prev) =>
               prev.map((p) => (p.id === item.id ? { ...p, isActive: nextStatus } : p))
             );
             try {
               await togglePanitiaStatus(item.id, nextStatus);
             } catch (err: any) {
-              // Rollback
               setPanitiaList((prev) =>
                 prev.map((p) => (p.id === item.id ? { ...p, isActive: item.isActive } : p))
               );
-              Alert.alert('Gagal', err?.message || 'Gagal mengubah status panitia.');
+              Alert.alert('Gagal', getErrorMessage(err, 'Gagal mengubah status panitia.'));
             }
           },
         },
@@ -223,30 +314,79 @@ export default function PanitiaScreen() {
     );
   };
 
+  const handleDeletePanitia = (item: PanitiaItem) => {
+    Alert.alert(
+      'Hapus Akun Panitia',
+      `Yakin ingin menghapus akun panitia "${item.email}"?`,
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Hapus',
+          style: 'destructive',
+          onPress: async () => {
+            setPanitiaList((prev) => prev.filter((p) => p.id !== item.id));
+            try {
+              await deletePanitia(item.id);
+            } catch (err: any) {
+              Alert.alert('Gagal', getErrorMessage(err, 'Tidak dapat menghapus akun panitia.'));
+              fetchPanitiaList();
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Filter pencarian
+  const filtered = panitiaList.filter((p) => {
+    const q = search.toLowerCase().trim();
+    if (!q) return true;
+    return p.email.toLowerCase().includes(q) || (p.name && p.name.toLowerCase().includes(q));
+  });
+
   const renderPanitia = ({ item }: { item: PanitiaItem }) => {
-    const initials = item.email.charAt(0).toUpperCase();
+    const initials = (item.name || item.email).charAt(0).toUpperCase();
+    const color = getAvatarColor(item.email);
+
     return (
       <View style={styles.panitiaCard}>
-        <View style={styles.panitiaAvatar}>
+        <View style={[styles.panitiaAvatar, { backgroundColor: color }]}>
           <Text style={styles.panitiaAvatarText}>{initials}</Text>
         </View>
+
         <View style={styles.panitiaInfo}>
-          <Text style={styles.panitiaEmail} numberOfLines={1}>{item.email}</Text>
+          <Text style={styles.panitiaEmail} numberOfLines={1}>
+            {item.email}
+          </Text>
           <Text style={styles.panitiaMeta}>
-            Role: Panitia • {item.createdAt
-              ? new Date(item.createdAt).toLocaleDateString('id-ID')
-              : 'Baru dibuat'}
+            Role: Panitia • {item.createdAt ? new Date(item.createdAt).toLocaleDateString('id-ID') : 'Terdaftar'}
           </Text>
         </View>
-        <TouchableOpacity
-          activeOpacity={0.7}
-          onPress={() => handleToggleStatus(item)}
-          style={[styles.statusBadge, item.isActive ? styles.statusActive : styles.statusInactive]}
-        >
-          <Text style={[styles.statusText, item.isActive ? styles.statusActiveText : styles.statusInactiveText]}>
-            {item.isActive ? 'Aktif' : 'Non-aktif'}
-          </Text>
-        </TouchableOpacity>
+
+        <View style={styles.panitiaActions}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => handleToggleStatus(item)}
+            style={[styles.statusBadge, item.isActive !== false ? styles.statusActive : styles.statusInactive]}
+          >
+            <Text
+              style={[
+                styles.statusText,
+                item.isActive !== false ? styles.statusActiveText : styles.statusInactiveText,
+              ]}
+            >
+              {item.isActive !== false ? 'Aktif' : 'Non-aktif'}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.deleteBtn}
+            onPress={() => handleDeletePanitia(item)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="trash-outline" size={18} color="#EF5350" />
+          </TouchableOpacity>
+        </View>
       </View>
     );
   };
@@ -259,31 +399,46 @@ export default function PanitiaScreen() {
         <TouchableOpacity
           style={styles.addBtn}
           onPress={() => setShowModal(true)}
+          activeOpacity={0.85}
         >
           <Ionicons name="add" size={20} color="#fff" />
           <Text style={styles.addBtnText}>Buat Akun</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Banner: Tampil hanya jika terjadi error / backend gap */}
-      {loadError && (
-        <View style={styles.todoBanner}>
-          <Ionicons name="warning-outline" size={18} color="#F57F17" />
-          <Text style={styles.todoBannerText}>
-            Gagal memuat daftar panitia dari server atau endpoint belum siap.{'\n'}
-            Tarik ke bawah untuk memuat ulang.
-          </Text>
-        </View>
-      )}
+      {/* Search Input (seperti pada Siswa) */}
+      <View style={styles.searchContainer}>
+        <Ionicons name="search-outline" size={18} color="#9E9E9E" style={{ marginRight: 8 }} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Cari email atau akun panitia..."
+          placeholderTextColor="#9E9E9E"
+          value={search}
+          onChangeText={setSearch}
+        />
+        {search.length > 0 && (
+          <TouchableOpacity onPress={() => setSearch('')}>
+            <Ionicons name="close-circle" size={18} color="#BDBDBD" />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Counter Note (seperti 'X siswa terdaftar') */}
+      <Text style={styles.searchNote}>
+        {search.length > 0
+          ? `${filtered.length} dari ${panitiaList.length} panitia`
+          : `${panitiaList.length} panitia terdaftar`}
+      </Text>
 
       {/* List */}
       {loading ? (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <View style={styles.loaderContainer}>
           <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={styles.loaderText}>Memuat daftar panitia...</Text>
         </View>
       ) : (
         <FlatList
-          data={panitiaList}
+          data={filtered}
           keyExtractor={(item) => item.id}
           renderItem={renderPanitia}
           contentContainerStyle={styles.listContent}
@@ -292,10 +447,12 @@ export default function PanitiaScreen() {
           }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <Ionicons name="person-add-outline" size={56} color="#BDBDBD" />
-              <Text style={styles.emptyTitle}>Belum ada akun panitia</Text>
+              <Ionicons name="people-outline" size={56} color="#BDBDBD" />
+              <Text style={styles.emptyTitle}>
+                {search ? 'Tidak ada panitia yang cocok dengan pencarian.' : 'Belum ada akun panitia'}
+              </Text>
               <Text style={styles.emptySubtitle}>
-                Ketuk "Buat Akun" di atas untuk menambah panitia baru.
+                Ketuk "Buat Akun" di atas untuk mendaftarkan akun panitia baru.
               </Text>
             </View>
           }
@@ -305,10 +462,7 @@ export default function PanitiaScreen() {
       <CreatePanitiaModal
         visible={showModal}
         onClose={() => setShowModal(false)}
-        onSuccess={(newPanitia) => {
-          handlePanitiaCreated(newPanitia);
-          setShowModal(false);
-        }}
+        onSuccess={handlePanitiaCreated}
       />
     </SafeAreaView>
   );
@@ -351,23 +505,39 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 14,
   },
-  todoBanner: {
+  searchContainer: {
     flexDirection: 'row',
-    backgroundColor: '#FFF8E1',
-    borderLeftWidth: 3,
-    borderLeftColor: '#F57F17',
+    alignItems: 'center',
+    backgroundColor: '#fff',
     marginHorizontal: Spacing.base,
-    marginTop: Spacing.base,
+    marginTop: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Platform.OS === 'ios' ? 10 : 6,
     borderRadius: Radius.lg,
-    padding: Spacing.md,
-    gap: 10,
-    alignItems: 'flex-start',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
   },
-  todoBannerText: {
+  searchInput: {
     flex: 1,
+    fontSize: 14,
+    color: '#1E1E1E',
+  },
+  searchNote: {
     fontSize: 12,
-    color: '#5D4037',
-    lineHeight: 18,
+    color: '#757575',
+    marginHorizontal: Spacing.base,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  loaderContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+  },
+  loaderText: {
+    fontSize: 13,
+    color: '#757575',
   },
   listContent: {
     padding: Spacing.base,
@@ -391,7 +561,6 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#E1F5FE',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -399,7 +568,7 @@ const styles = StyleSheet.create({
   panitiaAvatarText: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#0277BD',
+    color: '#fff',
   },
   panitiaInfo: {
     flex: 1,
@@ -414,6 +583,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#757575',
   },
+  panitiaActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   statusBadge: {
     borderRadius: Radius.round,
     paddingHorizontal: 10,
@@ -424,6 +598,10 @@ const styles = StyleSheet.create({
   statusText: { fontSize: 11, fontWeight: '700' },
   statusActiveText: { color: '#2E7D32' },
   statusInactiveText: { color: '#6D4C41' },
+  deleteBtn: {
+    padding: 6,
+    borderRadius: Radius.md,
+  },
   emptyContainer: {
     alignItems: 'center',
     paddingVertical: 60,
@@ -433,6 +611,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#424242',
+    textAlign: 'center',
   },
   emptySubtitle: {
     fontSize: 13,
@@ -445,8 +624,11 @@ const styles = StyleSheet.create({
 // Modal styles
 const ms = StyleSheet.create({
   overlay: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  sheetContainer: {
+    flex: 1,
     justifyContent: 'flex-end',
   },
   sheet: {
@@ -454,20 +636,26 @@ const ms = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: Spacing.base,
+    paddingBottom: Platform.OS === 'ios' ? 40 : Spacing.base,
+  },
+  handleArea: {
+    alignItems: 'center',
+    paddingVertical: 8,
+    marginTop: -8,
+    marginHorizontal: -Spacing.base,
   },
   handle: {
     width: 40,
     height: 4,
     backgroundColor: '#E0E0E0',
     borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: Spacing.md,
   },
   sheetHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: Spacing.base,
+    marginTop: 4,
   },
   sheetTitle: {
     fontSize: 18,

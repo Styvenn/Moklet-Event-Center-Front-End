@@ -52,6 +52,56 @@ export const tokenStorage = {
   },
 };
 
+// Helper generic storage aman untuk Web & Mobile Native (JSON / Objects)
+export const appStorage = {
+  async getItem<T>(key: string, defaultValue: T): Promise<T> {
+    try {
+      let raw: string | null = null;
+      if (Platform.OS === 'web') {
+        if (typeof window !== 'undefined') {
+          raw = localStorage.getItem(key);
+        }
+      } else {
+        raw = await SecureStore.getItemAsync(key);
+      }
+      if (!raw) return defaultValue;
+      return JSON.parse(raw) as T;
+    } catch (e) {
+      console.warn(`Error reading key ${key} from storage:`, e);
+      return defaultValue;
+    }
+  },
+
+  async setItem<T>(key: string, value: T): Promise<void> {
+    try {
+      const raw = JSON.stringify(value);
+      if (Platform.OS === 'web') {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(key, raw);
+        }
+        return;
+      }
+      await SecureStore.setItemAsync(key, raw);
+    } catch (e) {
+      console.warn(`Error saving key ${key} to storage:`, e);
+    }
+  },
+
+  async removeItem(key: string): Promise<void> {
+    try {
+      if (Platform.OS === 'web') {
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem(key);
+        }
+        return;
+      }
+      await SecureStore.deleteItemAsync(key);
+    } catch (e) {
+      console.warn(`Error deleting key ${key} from storage:`, e);
+    }
+  },
+};
+
 export const api = axios.create({
   baseURL: API_URL,
   headers: {
@@ -79,6 +129,30 @@ export interface ApiErrorResponse {
   formattedMessage: string;
 }
 
+/**
+ * Helper untuk mengambil pesan error yang ramah pengguna dari object error apapun.
+ */
+export function getErrorMessage(err: unknown, fallback = 'Terjadi kesalahan pada sistem. Silakan coba lagi.'): string {
+  if (!err) return fallback;
+  if (typeof err === 'string') return err;
+  
+  const e = err as any;
+  if (e.formattedMessage && typeof e.formattedMessage === 'string') {
+    return e.formattedMessage;
+  }
+  if (typeof e.message === 'string' && e.message.trim().length > 0) {
+    return e.message;
+  }
+  if (Array.isArray(e.message)) {
+    return e.message.join('\n');
+  }
+  if (e.response?.data?.message) {
+    const rm = e.response.data.message;
+    return Array.isArray(rm) ? rm.join('\n') : String(rm);
+  }
+  return fallback;
+}
+
 // Response Interceptor: Unwrap data standar & Normalisasi error
 api.interceptors.response.use(
   (response) => {
@@ -96,8 +170,34 @@ api.interceptors.response.use(
     let formattedMessage = '';
     if (Array.isArray(rawMessage)) {
       formattedMessage = rawMessage.join('\n');
+    } else if (typeof rawMessage === 'object' && rawMessage !== null) {
+      formattedMessage = JSON.stringify(rawMessage);
     } else {
       formattedMessage = String(rawMessage);
+    }
+
+    // Terjemahkan error umum backend (Prisma / NestJS / HTTP) ke bahasa yang jelas bagi admin
+    const lowerMsg = formattedMessage.toLowerCase();
+    if (statusCode === 500) {
+      if (lowerMsg.includes('p2002') || lowerMsg.includes('unique constraint') || lowerMsg.includes('duplicate')) {
+        formattedMessage = 'Data sudah terdaftar di sistem (duplikat). Periksa kembali data yang dimasukkan.';
+      } else if (
+        lowerMsg.includes('p2003') ||
+        lowerMsg.includes('foreign key') ||
+        lowerMsg.includes('constraint') ||
+        lowerMsg.includes('student') ||
+        lowerMsg.includes('siswa')
+      ) {
+        formattedMessage = 'Tidak dapat memproses data karena masih terhubung dengan data lain (misalnya kelas masih memiliki siswa).';
+      } else if (lowerMsg === 'internal server error' || lowerMsg.includes('terjadi kesalahan pada server')) {
+        formattedMessage = 'Terjadi kendala pada server backend. Pastikan data valid dan tidak melanggar aturan sistem.';
+      }
+    } else if (statusCode === 400) {
+      if (lowerMsg.includes('already exists') || lowerMsg.includes('sudah ada')) {
+        formattedMessage = 'Data tersebut sudah ada di sistem.';
+      }
+    } else if (statusCode === 404) {
+      formattedMessage = 'Data atau layanan yang diminta tidak ditemukan di server.';
     }
 
     const normalizedError: ApiErrorResponse = {

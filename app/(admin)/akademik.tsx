@@ -1,5 +1,5 @@
 // app/(admin)/akademik.tsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,6 @@ import {
   SafeAreaView,
   Platform,
   TouchableOpacity,
-  FlatList,
   TextInput,
   ActivityIndicator,
   Alert,
@@ -15,6 +14,8 @@ import {
   KeyboardAvoidingView,
   ScrollView,
   RefreshControl,
+  PanResponder,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius } from '../../constants/theme';
@@ -30,6 +31,85 @@ import {
   updateSystemSetting,
   SystemSetting,
 } from '../../services/admin/system-setting.service';
+
+// ─── Hook: Drag To Close ───────────────────────────────────────────────────────
+
+const DRAG_DISMISS_THRESHOLD = 80;
+const DRAG_MAX_OPACITY = 300;
+
+function useDragToClose(onClose: () => void) {
+  const translateY = useRef(new Animated.Value(0)).current;
+
+  const overlayOpacity = translateY.interpolate({
+    inputRange: [0, DRAG_MAX_OPACITY],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 2,
+      onPanResponderMove: (_, gs) => {
+        if (gs.dy > 0) translateY.setValue(gs.dy);
+      },
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dy > DRAG_DISMISS_THRESHOLD) {
+          Animated.timing(translateY, {
+            toValue: 700,
+            duration: 200,
+            useNativeDriver: true,
+          }).start(() => {
+            translateY.setValue(0);
+            onClose();
+          });
+        } else {
+          Animated.spring(translateY, {
+            toValue: 0,
+            useNativeDriver: true,
+            bounciness: 4,
+          }).start();
+        }
+      },
+    })
+  ).current;
+
+  return { translateY, overlayOpacity, panResponder };
+}
+
+import { getErrorMessage } from '../../services/api';
+
+// ─── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Parse error dari backend saat hapus kelas.
+ * Jika ada siswa yang terhubung atau terjadi error 500/FK constraint, tampilkan pesan informatif.
+ */
+function parseDeleteClassError(e: any): string {
+  const msg: string = (
+    e?.formattedMessage ||
+    (typeof e?.message === 'string' ? e.message : '') ||
+    (Array.isArray(e?.message) ? e.message.join(' ') : '') ||
+    e?.response?.data?.message ||
+    ''
+  ).toLowerCase();
+
+  if (
+    msg.includes('student') ||
+    msg.includes('foreign key') ||
+    msg.includes('constraint') ||
+    msg.includes('related') ||
+    msg.includes('siswa') ||
+    msg.includes('p2003') ||
+    msg.includes('p2014') ||
+    msg.includes('internal server error') ||
+    msg.includes('terhubung dengan data lain') ||
+    e?.statusCode === 500
+  ) {
+    return 'Kelas tidak dapat dihapus karena masih memiliki data siswa yang terdaftar di dalamnya.\n\nPindahkan atau hapus semua siswa dari kelas ini terlebih dahulu di menu Data Siswa, lalu coba lagi.';
+  }
+  return getErrorMessage(e, 'Tidak dapat menghapus kelas. Coba lagi.');
+}
 
 // ─── Modal Tambah Kelas ────────────────────────────────────────────────────────
 
@@ -50,76 +130,106 @@ function AddClassModal({ visible, onClose, onSuccess }: AddClassModalProps) {
   const reset = () => { setGrade('X'); setName(''); setError(''); };
   const handleClose = () => { reset(); onClose(); };
 
+  const { translateY, overlayOpacity, panResponder } = useDragToClose(handleClose);
+
   const handleSubmit = async () => {
-    if (!name.trim()) { setError('Nama kelas wajib diisi.'); return; }
+    let cleanName = name.trim();
+    if (!cleanName) {
+      setError('Nama kelas wajib diisi.');
+      return;
+    }
+    // Jika user mengetik "X RPL 1" padahal grade sudah dipilih "X", bersihkan prefix grade ganda
+    const prefixRegex = new RegExp(`^${grade}\\s+`, 'i');
+    if (prefixRegex.test(cleanName)) {
+      cleanName = cleanName.replace(prefixRegex, '').trim();
+    }
+
+    if (!cleanName) {
+      setError('Nama kelas tidak boleh kosong.');
+      return;
+    }
 
     setLoading(true);
     setError('');
     try {
-      await createClass({ grade, name: name.trim() });
+      await createClass({ grade, name: cleanName });
       reset();
       onSuccess();
     } catch (e: any) {
-      setError(e?.message || 'Gagal menambah kelas. Coba lagi.');
+      setError(getErrorMessage(e, 'Gagal menambah kelas. Pastikan nama kelas belum terdaftar pada grade ini.'));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
-      <View style={ms.overlay}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={{ width: '100%' }}
-        >
-          <View style={ms.sheet}>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      statusBarTranslucent
+      onRequestClose={handleClose}
+    >
+      <Animated.View style={[ms.overlay, { opacity: overlayOpacity }]} />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={ms.sheetContainer}
+        pointerEvents="box-none"
+      >
+        <Animated.View style={[ms.sheet, { transform: [{ translateY }] }]}>
+          <View {...panResponder.panHandlers} style={ms.handleArea}>
             <View style={ms.handle} />
-            <View style={ms.sheetHeader}>
-              <Text style={ms.sheetTitle}>Tambah Kelas</Text>
-              <TouchableOpacity onPress={handleClose}>
-                <Ionicons name="close" size={24} color="#607D8B" />
-              </TouchableOpacity>
-            </View>
-
-            {/* Grade Selector */}
-            <Text style={ms.label}>Grade *</Text>
-            <View style={ms.gradeRow}>
-              {GRADE_OPTIONS.map((g) => (
-                <TouchableOpacity
-                  key={g}
-                  style={[ms.gradeBtn, grade === g && ms.gradeBtnActive]}
-                  onPress={() => setGrade(g)}
-                >
-                  <Text style={[ms.gradeBtnText, grade === g && ms.gradeBtnTextActive]}>
-                    Kelas {g}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {/* Nama Kelas */}
-            <Text style={ms.label}>Nama Kelas *</Text>
-            <TextInput
-              style={ms.input}
-              placeholder={`Contoh: ${grade} RPL 1`}
-              placeholderTextColor="#9E9E9E"
-              value={name}
-              onChangeText={setName}
-            />
-
-            {error ? <Text style={ms.errorText}>{error}</Text> : null}
-
-            <TouchableOpacity
-              style={[ms.submitBtn, (loading || !name.trim()) && { opacity: 0.5 }]}
-              onPress={handleSubmit}
-              disabled={loading || !name.trim()}
-            >
-              {loading ? <ActivityIndicator color="#fff" /> : <Text style={ms.submitBtnText}>Simpan Kelas</Text>}
+          </View>
+          <View style={ms.sheetHeader}>
+            <Text style={ms.sheetTitle}>Tambah Kelas</Text>
+            <TouchableOpacity onPress={handleClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close" size={24} color="#607D8B" />
             </TouchableOpacity>
           </View>
-        </KeyboardAvoidingView>
-      </View>
+
+          {/* Grade Selector */}
+          <Text style={ms.label}>Tingkat / Grade *</Text>
+          <View style={ms.gradeRow}>
+            {GRADE_OPTIONS.map((g) => (
+              <TouchableOpacity
+                key={g}
+                style={[ms.gradeBtn, grade === g && ms.gradeBtnActive]}
+                onPress={() => setGrade(g)}
+              >
+                <Text style={[ms.gradeBtnText, grade === g && ms.gradeBtnTextActive]}>
+                  Kelas {g}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Nama Kelas */}
+          <Text style={ms.label}>Nama Jurusan & Rombel *</Text>
+          <TextInput
+            style={ms.input}
+            placeholder="Contoh: RPL 1, TKJ 2, Animasi 1"
+            placeholderTextColor="#9E9E9E"
+            value={name}
+            onChangeText={(t) => {
+              setName(t);
+              if (error) setError('');
+            }}
+          />
+          <Text style={ms.hintText}>
+            ℹ Format nama yang akan disimpan: {grade} - {name.trim() || 'RPL 1'}
+          </Text>
+
+          {error ? <Text style={ms.errorText}>{error}</Text> : null}
+
+          <TouchableOpacity
+            style={[ms.submitBtn, (loading || !name.trim()) && { opacity: 0.5 }]}
+            onPress={handleSubmit}
+            disabled={loading || !name.trim()}
+          >
+            {loading ? <ActivityIndicator color="#fff" /> : <Text style={ms.submitBtnText}>Simpan Kelas</Text>}
+          </TouchableOpacity>
+        </Animated.View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -158,6 +268,8 @@ function ChangeAcademicYearModal({ visible, current, onClose, onSuccess }: Chang
   const reset = () => { setNewYear(''); setNewAngkatan(''); setError(''); };
   const handleClose = () => { reset(); onClose(); };
 
+  const { translateY, overlayOpacity, panResponder } = useDragToClose(handleClose);
+
   const handleSubmit = async () => {
     if (!newYear.trim()) { setError('Tahun ajaran baru wajib diisi.'); return; }
     const angkatanNum = parseInt(newAngkatan);
@@ -180,87 +292,95 @@ function ChangeAcademicYearModal({ visible, current, onClose, onSuccess }: Chang
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
-      <View style={ms.overlay}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={{ width: '100%' }}
-        >
-          <View style={ms.sheet}>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      statusBarTranslucent
+      onRequestClose={handleClose}
+    >
+      <Animated.View style={[ms.overlay, { opacity: overlayOpacity }]} />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={ms.sheetContainer}
+        pointerEvents="box-none"
+      >
+        <Animated.View style={[ms.sheet, { transform: [{ translateY }] }]}>
+          <View {...panResponder.panHandlers} style={ms.handleArea}>
             <View style={ms.handle} />
-            <View style={ms.sheetHeader}>
-              <Text style={ms.sheetTitle}>⚠️ Ganti Tahun Ajaran</Text>
-              <TouchableOpacity onPress={handleClose}>
-                <Ionicons name="close" size={24} color="#607D8B" />
-              </TouchableOpacity>
-            </View>
+          </View>
+          <View style={ms.sheetHeader}>
+            <Text style={ms.sheetTitle}>⚠️ Ganti Tahun Ajaran</Text>
+            <TouchableOpacity onPress={handleClose}>
+              <Ionicons name="close" size={24} color="#607D8B" />
+            </TouchableOpacity>
+          </View>
 
-            {/* Warning Box */}
-            <View style={ms.warningBox}>
-              <Ionicons name="warning" size={20} color="#B71C1C" />
-              <Text style={ms.warningText}>
-                Mengganti tahun ajaran akan mempengaruhi seluruh data kelas dan siswa aktif. Tindakan ini{' '}
-                <Text style={{ fontWeight: '800' }}>tidak bisa dibatalkan</Text>. Pastikan data sudah
-                dibackup sebelum melanjutkan.
+          {/* Warning Box */}
+          <View style={ms.warningBox}>
+            <Ionicons name="warning" size={20} color="#B71C1C" />
+            <Text style={ms.warningText}>
+              Mengganti tahun ajaran akan mempengaruhi seluruh data kelas dan siswa aktif. Tindakan ini{' '}
+              <Text style={{ fontWeight: '800' }}>tidak bisa dibatalkan</Text>. Pastikan data sudah
+              dibackup sebelum melanjutkan.
+            </Text>
+          </View>
+
+          {/* Tahun Ajaran Sekarang (readonly info) */}
+          {current && (
+            <View style={ms.currentInfoRow}>
+              <Text style={ms.currentInfoLabel}>Saat ini:</Text>
+              <Text style={ms.currentInfoValue}>
+                {current.currentAcademicYear} • Angkatan {current.currentTopAngkatan}
               </Text>
             </View>
+          )}
 
-            {/* Tahun Ajaran Sekarang (readonly info) */}
-            {current && (
-              <View style={ms.currentInfoRow}>
-                <Text style={ms.currentInfoLabel}>Saat ini:</Text>
-                <Text style={ms.currentInfoValue}>
-                  {current.currentAcademicYear} • Angkatan {current.currentTopAngkatan}
-                </Text>
-              </View>
-            )}
+          {/* Tahun Ajaran Baru */}
+          <Text style={ms.label}>Tahun Ajaran Baru *</Text>
+          <TextInput
+            style={ms.input}
+            placeholder="Contoh: 2025/2026"
+            placeholderTextColor="#9E9E9E"
+            value={newYear}
+            onChangeText={setNewYear}
+          />
 
-            {/* Tahun Ajaran Baru */}
-            <Text style={ms.label}>Tahun Ajaran Baru *</Text>
-            <TextInput
-              style={ms.input}
-              placeholder="Contoh: 2025/2026"
-              placeholderTextColor="#9E9E9E"
-              value={newYear}
-              onChangeText={setNewYear}
-            />
+          {/* Angkatan Tertinggi Baru */}
+          <Text style={ms.label}>Angkatan Tertinggi Baru *</Text>
+          <TextInput
+            style={ms.input}
+            placeholder="Contoh: 2023"
+            placeholderTextColor="#9E9E9E"
+            keyboardType="numeric"
+            value={newAngkatan}
+            onChangeText={setNewAngkatan}
+          />
+          <Text style={ms.hintText}>
+            ℹ Angkatan tertinggi = tahun masuk kelas XII saat ini. Contoh: jika kelas XII masuk 2023, isi 2023.
+          </Text>
 
-            {/* Angkatan Tertinggi Baru */}
-            <Text style={ms.label}>Angkatan Tertinggi Baru *</Text>
-            <TextInput
-              style={ms.input}
-              placeholder="Contoh: 2023"
-              placeholderTextColor="#9E9E9E"
-              keyboardType="numeric"
-              value={newAngkatan}
-              onChangeText={setNewAngkatan}
-            />
-            <Text style={ms.hintText}>
-              ⓘ Angkatan tertinggi = tahun masuk kelas XII saat ini. Contoh: jika kelas XII masuk 2023, isi 2023.
-            </Text>
+          {error ? <Text style={ms.errorText}>{error}</Text> : null}
 
-            {error ? <Text style={ms.errorText}>{error}</Text> : null}
-
-            {/* Actions */}
-            <View style={ms.btnRow}>
-              <TouchableOpacity style={ms.cancelBtn} onPress={handleClose}>
-                <Text style={ms.cancelBtnText}>Batal</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[ms.dangerBtn, loading && { opacity: 0.6 }]}
-                onPress={handleSubmit}
-                disabled={loading}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={ms.dangerBtnText}>Simpan</Text>
-                )}
-              </TouchableOpacity>
-            </View>
+          {/* Actions */}
+          <View style={ms.btnRow}>
+            <TouchableOpacity style={ms.cancelBtn} onPress={handleClose}>
+              <Text style={ms.cancelBtnText}>Batal</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[ms.dangerBtn, loading && { opacity: 0.6 }]}
+              onPress={handleSubmit}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={ms.dangerBtnText}>Simpan</Text>
+              )}
+            </TouchableOpacity>
           </View>
-        </KeyboardAvoidingView>
-      </View>
+        </Animated.View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -295,9 +415,14 @@ export default function AkademikScreen() {
   const onRefresh = () => { setRefreshing(true); fetchAll(); };
 
   const handleDeleteClass = (cls: ClassItem) => {
+    const studentCount = cls._count?.students ?? cls.studentCount;
+    const hasStudents = studentCount !== undefined && studentCount > 0;
+
     Alert.alert(
       'Hapus Kelas',
-      `Yakin ingin menghapus "${cls.grade} — ${cls.name}"?`,
+      hasStudents
+        ? `Kelas "${cls.grade} — ${cls.name}" masih memiliki ${studentCount} siswa.\n\nApakah Anda yakin ingin menghapus kelas ini? Siswa di kelas ini perlu dipindahkan terlebih dahulu.`
+        : `Yakin ingin menghapus "${cls.grade} — ${cls.name}"?`,
       [
         { text: 'Batal', style: 'cancel' },
         {
@@ -308,7 +433,7 @@ export default function AkademikScreen() {
               await deleteClass(cls.id);
               setClasses((prev) => prev.filter((c) => c.id !== cls.id));
             } catch (e: any) {
-              Alert.alert('Gagal', e?.message || 'Tidak dapat menghapus kelas.');
+              Alert.alert('Gagal Menghapus Kelas', parseDeleteClassError(e));
             }
           },
         },
@@ -329,7 +454,10 @@ export default function AkademikScreen() {
       </View>
       <Text style={styles.className}>{cls.name}</Text>
       {cls._count?.students !== undefined && (
-        <Text style={styles.classStudentCount}>
+        <Text style={[
+          styles.classStudentCount,
+          cls._count.students > 0 && styles.classStudentCountHasStudents,
+        ]}>
           {cls._count.students} siswa
         </Text>
       )}
@@ -648,6 +776,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#9E9E9E',
   },
+  classStudentCountHasStudents: {
+    color: '#F57F17',
+    fontWeight: '600',
+  },
   classDeleteBtn: {
     width: 32,
     height: 32,
@@ -671,8 +803,11 @@ const styles = StyleSheet.create({
 // Modal styles
 const ms = StyleSheet.create({
   overlay: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  sheetContainer: {
+    flex: 1,
     justifyContent: 'flex-end',
   },
   sheet: {
@@ -681,19 +816,24 @@ const ms = StyleSheet.create({
     borderTopRightRadius: 24,
     padding: Spacing.base,
   },
+  handleArea: {
+    alignItems: 'center',
+    paddingVertical: 8,
+    marginTop: -8,
+    marginHorizontal: -Spacing.base,
+  },
   handle: {
     width: 40,
     height: 4,
     backgroundColor: '#E0E0E0',
     borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: Spacing.md,
   },
   sheetHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: Spacing.base,
+    marginTop: 4,
   },
   sheetTitle: {
     fontSize: 18,
@@ -799,10 +939,10 @@ const ms = StyleSheet.create({
   cancelBtnText: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#607D8B',
+    color: '#424242',
   },
   dangerBtn: {
-    flex: 2,
+    flex: 1,
     paddingVertical: 14,
     borderRadius: Radius.xl,
     backgroundColor: '#B71C1C',

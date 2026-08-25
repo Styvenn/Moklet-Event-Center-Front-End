@@ -44,17 +44,23 @@ export default function AdminDashboardScreen() {
 
   const fetchStats = useCallback(async () => {
     try {
-      // Total Siswa: ambil meta.total dari GET /students?limit=1
-      const studentsRes = await getStudents(1, 1);
+      // Total Siswa: gunakan limit=100 agar meta.total akurat
+      // (limit=1 bisa sebabkan backend return total=1 jika tidak ada proper pagination meta)
+      const studentsRes = await getStudents(1, 100);
       const totalSiswa = studentsRes.meta.total;
 
       // Panitia Aktif: fetch semua panitia, hitung yang isActive === true
-      let panitiaAktif = 0;
+      // Jika endpoint belum siap (404), panitiaAktif tetap null → tampilkan "—"
+      let panitiaAktif: number | null = null;
       try {
         const panitiaList = await getPanitia();
         panitiaAktif = panitiaList.filter((p) => p.isActive).length;
-      } catch (e) {
-        console.warn('Error fetching panitia stats:', e);
+      } catch (e: any) {
+        const status = e?.response?.status || e?.status;
+        if (status !== 404) {
+          console.warn('Error fetching panitia stats:', e);
+        }
+        // Tetap null — ditampilkan sebagai "—" di UI
       }
 
       // Event Berjalan: fetch semua event, hitung yang ONGOING
@@ -163,7 +169,7 @@ export default function AdminDashboardScreen() {
                 </View>
                 <Text style={styles.statLabelSmall}>Panitia Aktif</Text>
                 <Text style={styles.statValueMid}>
-                  {stats.panitiaAktif !== null ? stats.panitiaAktif : '—'}
+                  {stats.panitiaAktif !== null && stats.panitiaAktif !== undefined ? stats.panitiaAktif : '—'}
                 </Text>
               </View>
 
