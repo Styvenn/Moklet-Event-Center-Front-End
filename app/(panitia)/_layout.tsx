@@ -22,7 +22,7 @@ const PANITIA_TABS = [
     iconInactive: "home-outline" as const,
   },
   {
-    name: "events",
+    name: "events/index",
     label: "Events",
     iconActive: "calendar" as const,
     iconInactive: "calendar-outline" as const,
@@ -118,7 +118,7 @@ export default function PanitiaLayout() {
     <PanitiaGuard>
       <Tabs screenOptions={{ headerShown: false }} tabBar={(props) => <PanitiaTabBar {...props} />}>
         <Tabs.Screen name="dashboard" options={{ title: "Home" }} />
-        <Tabs.Screen name="events" options={{ title: "Events" }} />
+        <Tabs.Screen name="events/index" options={{ title: "Events" }} />
         <Tabs.Screen name="announcements" options={{ title: "Info" }} />
         <Tabs.Screen name="history" options={{ title: "History" }} />
       </Tabs>

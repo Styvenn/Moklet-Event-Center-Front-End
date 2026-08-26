@@ -278,7 +278,7 @@ export default function HomeScreen() {
                 <View style={styles.sectionHeaderRow}>
                   <Text style={styles.sectionTitle}>Pengumuman Terbaru</Text>
                   <TouchableOpacity onPress={() => router.push('/(tabs)/info')}>
-                    <Text style={styles.seeAllText}>Lihat Semua →</Text>
+                    <Text style={styles.seeAllText}>Lihat Semua {'->'}</Text>
                   </TouchableOpacity>
                 </View>
 
@@ -328,14 +328,11 @@ export default function HomeScreen() {
           {/* Top Profile Card Header */}
           <View style={styles.profileCard}>
             <View style={styles.avatarBorder}>
-              <Image
-                source={{
-                  uri:
-                    user?.student?.avatarUrl ||
-                    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80',
-                }}
-                style={styles.avatarImage}
-              />
+              <View style={styles.avatarCircle}>
+                <Text style={styles.avatarInitial}>
+                  {studentName.charAt(0).toUpperCase()}
+                </Text>
+              </View>
             </View>
             <View style={styles.profileTextContainer}>
               <Text style={styles.profileName} numberOfLines={1}>
@@ -358,7 +355,7 @@ export default function HomeScreen() {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Event Terdekat</Text>
             <TouchableOpacity activeOpacity={0.7} onPress={() => router.push('/(tabs)/events')}>
-              <Text style={styles.sectionLink}>Lihat Semua →</Text>
+              <Text style={styles.sectionLink}>Lihat Semua {'->'}</Text>
             </TouchableOpacity>
           </View>
 
@@ -418,7 +415,7 @@ export default function HomeScreen() {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Pengumuman Terbaru</Text>
             <TouchableOpacity activeOpacity={0.7} onPress={() => router.push('/(tabs)/info')}>
-              <Text style={styles.sectionLink}>Lihat Semua →</Text>
+              <Text style={styles.sectionLink}>Lihat Semua {'->'}</Text>
             </TouchableOpacity>
           </View>
 

@@ -32,6 +32,13 @@ function getCategoryIcon(name: string): any {
   return 'trophy-outline';
 }
 
+function shortenName(name: string | null): string {
+  if (!name) return '-';
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length <= 2) return name;
+  return `${parts[0]} ${parts.slice(1).map((part) => `${part.charAt(0)}.`).join(' ')}`;
+}
+
 export default function HistoryScreen() {
   const [historyList, setHistoryList] = useState<RegistrationHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -130,22 +137,21 @@ export default function HistoryScreen() {
 
               {/* Bottom row: date + team */}
               <View style={styles.cardBottom}>
-                <View style={styles.metaRow}>
+                <View style={[styles.metaRow, styles.metaColumn]}>
                   <Ionicons name="calendar-outline" size={13} color={Colors.textSubtitle} />
-                  <Text style={styles.metaText}>{item.dateFormatted}</Text>
+                  <Text style={styles.metaText} numberOfLines={1}>{item.dateFormatted}</Text>
                 </View>
-                <View style={styles.metaRow}>
+                <View style={[styles.metaRow, styles.metaColumn, styles.teamColumn]}>
                   <Ionicons
                     name={item.isIndividual ? 'person-outline' : 'people-outline'}
                     size={13}
                     color={Colors.textSubtitle}
                   />
-                  <Text style={styles.metaText}>{item.teamName}</Text>
+                  <Text style={styles.metaText} numberOfLines={1}>{shortenName(item.teamName)}</Text>
                 </View>
                 {item.teamId ? (
-                  <View style={[styles.metaRow, { marginLeft: 'auto' }]}>
-                    <Text style={styles.viewRoomText}>Lihat Tim</Text>
-                    <Ionicons name="chevron-forward" size={12} color={Colors.primary} />
+                  <View style={[styles.metaRow, styles.metaColumn, styles.viewRoomColumn]}>
+                    <Text style={styles.viewRoomText}>Lihat Tim {'->'}</Text>
                   </View>
                 ) : null}
               </View>
@@ -250,12 +256,22 @@ const styles = StyleSheet.create({
   cardBottom: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.lg,
+    justifyContent: 'space-between',
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
+  },
+  metaColumn: {
+    flex: 1,
+    minWidth: 0,
+  },
+  teamColumn: {
+    justifyContent: 'center',
+  },
+  viewRoomColumn: {
+    justifyContent: 'flex-end',
   },
   metaText: {
     fontSize: 12,

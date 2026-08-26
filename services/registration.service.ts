@@ -155,11 +155,10 @@ export function normalizeRegistration(raw: RawRegistration): RegistrationHistory
   let dateFormatted = '-';
   if (rawDate) {
     try {
-      dateFormatted = new Date(rawDate).toLocaleDateString('id-ID', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-      });
+      const date = new Date(rawDate);
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      dateFormatted = `${day}-${month}-${date.getFullYear()}`;
     } catch {
       dateFormatted = rawDate;
     }

@@ -657,7 +657,7 @@ export default function EventDetailScreen() {
                   }
                 >
                   <Ionicons name="add" size={16} color="#fff" />
-                  <Text style={styles.addSmallText}>+ Tambah Lomba</Text>
+                  <Text style={styles.addSmallText}> Tambah Lomba</Text>
                 </TouchableOpacity>
               </View>
 
