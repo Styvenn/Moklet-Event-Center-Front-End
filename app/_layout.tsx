@@ -1,17 +1,24 @@
 // app/_layout.tsx
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import * as NavigationBar from 'expo-navigation-bar';
+import { useEffect } from 'react';
 import { AuthProvider } from '../context/AuthContext';
 
 export default function RootLayout() {
+  useEffect(() => {
+    NavigationBar.setBackgroundColorAsync('#F2F2F2');
+    NavigationBar.setButtonStyleAsync('dark');
+  }, []);
+
   return (
     <AuthProvider>
       <StatusBar style="dark" />
       <Stack
         screenOptions={{
           headerShown: false,
-          contentStyle: { backgroundColor: '#FFFFFF' },
-          animation: 'slide_from_right',
+          contentStyle: { backgroundColor: '#F2F2F2' },
+          animation: 'default',
         }}
       >
         <Stack.Screen name="index" />

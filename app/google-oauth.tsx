@@ -23,7 +23,7 @@ export default function GoogleOAuthScreen() {
   const params = useLocalSearchParams<{ flow?: string | string[] }>();
   const flow = firstParam(params.flow) || 'login';
   const { requestOtp, refreshMe } = useAuth();
-  const [statusText, setStatusText] = useState('Membuka halaman Google...');
+  
   const [errorMsg, setErrorMsg] = useState('');
 
   const finishWithToken = async (token: string) => {
@@ -57,13 +57,11 @@ export default function GoogleOAuthScreen() {
       const data = parsed?.data ?? parsed;
 
       if (data?.token) {
-        setStatusText('Login berhasil, memproses data akun...');
         await finishWithToken(data.token);
         return;
       }
 
       if (data?.email && data?.isVerified === false) {
-        setStatusText('Mengirim OTP ke email sekolah...');
         await requestOtp(data.email);
         router.replace({ pathname: '/verify-otp', params: { email: data.email, provider: 'google' } });
         return;
@@ -100,8 +98,6 @@ export default function GoogleOAuthScreen() {
       </View>
 
       <View style={styles.container}>
-        <Text style={styles.title}>{flow === 'register' ? 'Daftar dengan Google' : 'Masuk dengan Google'}</Text>
-        <Text style={styles.subtitle}>{statusText}</Text>
 
         {errorMsg ? (
           <View style={styles.errorBox}>

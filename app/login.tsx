@@ -18,6 +18,7 @@ import { Colors, Spacing, Radius } from '../constants/theme';
 import MokletLogo from '../components/MokletLogo';
 import { useAuth } from '../context/AuthContext';
 import api, { ApiErrorResponse } from '../services/api';
+import GoogleIcon from '../components/googleIcon';
 
 export default function LoginScreen() {
   const { login, refreshMe } = useAuth();
@@ -328,7 +329,9 @@ export default function LoginScreen() {
             disabled={loading}
             activeOpacity={0.85}
           >
-            <GoogleColorIcon />
+            <View style={styles.googleIconContainer}>
+              <GoogleIcon size={28} />
+            </View>
             <Text style={styles.googleButtonText}>Sign in using Google</Text>
           </TouchableOpacity>
 
@@ -424,14 +427,6 @@ export default function LoginScreen() {
         </View>
       </Modal>
     </KeyboardAvoidingView>
-  );
-}
-
-function GoogleColorIcon() {
-  return (
-    <View style={gStyles.wrapper}>
-      <Text style={gStyles.blue}>G</Text>
-    </View>
   );
 }
 
@@ -640,6 +635,9 @@ const styles = StyleSheet.create({
     borderColor: Colors.inputBorder,
     height: 50,
     backgroundColor: Colors.white,
+  },
+  googleIconContainer: {
+    marginRight: Spacing.sm,
   },
   googleButtonText: {
     fontSize: 14,

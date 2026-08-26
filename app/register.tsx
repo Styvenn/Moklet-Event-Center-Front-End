@@ -15,6 +15,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius } from '../constants/theme';
 import MokletLogo from '../components/MokletLogo';
+import GoogleIcon from '../components/googleIcon';
 import { useAuth } from '../context/AuthContext';
 import { ApiErrorResponse } from '../services/api';
 
@@ -25,6 +26,8 @@ export default function RegisterScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string; general?: string }>({});
+  const [isEmailFocused, setIsEmailFocused] = useState(false);
+  const [isPasswordFocused, setIsPasswordFocused] = useState(false);
 
   const validate = () => {
     const newErrors: { email?: string; password?: string } = {};
@@ -79,10 +82,11 @@ export default function RegisterScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { flexGrow: 1 }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -94,7 +98,7 @@ export default function RegisterScreen() {
 
           {/* Heading */}
           <Text style={styles.title}>Selamat Datang di{'\n'}Moklet Event Center</Text>
-          <Text style={styles.subtitle}>Masuk menggunakan email sekolah</Text>
+          <Text style={styles.subtitle}>Daftar menggunakan email sekolah Anda</Text>
 
           {errors.general ? (
             <View style={styles.generalErrorBox}>
@@ -105,36 +109,90 @@ export default function RegisterScreen() {
 
           {/* Email Input */}
           <View style={styles.inputWrapper}>
-            <View style={[styles.inputContainer, errors.email ? styles.inputError : null]}>
-              <Ionicons name="mail-outline" size={20} color={Colors.textSubtitle} style={styles.inputIcon} />
+            <Text style={styles.inputLabel}>Email Sekolah</Text>
+            <View
+              style={[
+                styles.inputContainer,
+                isEmailFocused && styles.inputFocused,
+                errors.email ? styles.inputError : null,
+              ]}
+            >
+              <Ionicons
+                name="mail-outline"
+                size={20}
+                color={isEmailFocused ? Colors.primary : Colors.textSubtitle}
+                style={styles.inputIcon}
+              />
               <TextInput
                 style={styles.input}
-                placeholder="nama@moklet.sch.id"
+                placeholder="nama@student.moklet.sch.id"
                 placeholderTextColor={Colors.textPlaceholder}
                 value={email}
-                onChangeText={(v) => { setEmail(v); setErrors((e) => ({ ...e, email: undefined, general: undefined })); }}
+                onChangeText={(v) => {
+                  setEmail(v);
+                  if (errors.email) setErrors((e) => ({ ...e, email: undefined, general: undefined }));
+                }}
+                onFocus={() => setIsEmailFocused(true)}
+                onBlur={() => setIsEmailFocused(false)}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
               />
+              {email.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => {
+                    setEmail('');
+                    setErrors((e) => ({ ...e, email: undefined, general: undefined }));
+                  }}
+                  style={styles.clearIcon}
+                >
+                  <Ionicons name="close-circle" size={18} color={Colors.textPlaceholder} />
+                </TouchableOpacity>
+              )}
             </View>
-            {errors.email ? <Text style={styles.errorText}>{errors.email}</Text> : null}
+            {errors.email ? (
+              <View style={styles.errorRow}>
+                <Ionicons name="alert-circle-outline" size={14} color={Colors.error} />
+                <Text style={styles.errorText}>{errors.email}</Text>
+              </View>
+            ) : null}
           </View>
 
           {/* Password Input */}
           <View style={styles.inputWrapper}>
-            <View style={[styles.inputContainer, errors.password ? styles.inputError : null]}>
-              <Ionicons name="lock-closed-outline" size={20} color={Colors.textSubtitle} style={styles.inputIcon} />
+            <Text style={styles.inputLabel}>Password</Text>
+            <View
+              style={[
+                styles.inputContainer,
+                isPasswordFocused && styles.inputFocused,
+                errors.password ? styles.inputError : null,
+              ]}
+            >
+              <Ionicons
+                name="lock-closed-outline"
+                size={20}
+                color={isPasswordFocused ? Colors.primary : Colors.textSubtitle}
+                style={styles.inputIcon}
+              />
               <TextInput
                 style={styles.input}
                 placeholder="Password (minimal 8 karakter)"
                 placeholderTextColor={Colors.textPlaceholder}
                 value={password}
-                onChangeText={(v) => { setPassword(v); setErrors((e) => ({ ...e, password: undefined, general: undefined })); }}
+                onChangeText={(v) => {
+                  setPassword(v);
+                  if (errors.password) setErrors((e) => ({ ...e, password: undefined, general: undefined }));
+                }}
+                onFocus={() => setIsPasswordFocused(true)}
+                onBlur={() => setIsPasswordFocused(false)}
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
               />
-              <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
+              <TouchableOpacity
+                onPress={() => setShowPassword(!showPassword)}
+                style={styles.eyeIcon}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
                 <Ionicons
                   name={showPassword ? 'eye-off-outline' : 'eye-outline'}
                   size={20}
@@ -142,7 +200,12 @@ export default function RegisterScreen() {
                 />
               </TouchableOpacity>
             </View>
-            {errors.password ? <Text style={styles.errorText}>{errors.password}</Text> : null}
+            {errors.password ? (
+              <View style={styles.errorRow}>
+                <Ionicons name="alert-circle-outline" size={14} color={Colors.error} />
+                <Text style={styles.errorText}>{errors.password}</Text>
+              </View>
+            ) : null}
           </View>
 
           {/* Kirim OTP Button */}
@@ -175,7 +238,9 @@ export default function RegisterScreen() {
             onPress={handleGoogleSignUp}
             activeOpacity={0.85}
           >
-            <GoogleColorIcon />
+            <View style={styles.googleIconContainer}>
+              <GoogleIcon size={28} />
+            </View>
             <Text style={styles.googleButtonText}>Daftar dengan Google</Text>
           </TouchableOpacity>
 
@@ -194,29 +259,6 @@ export default function RegisterScreen() {
     </KeyboardAvoidingView>
   );
 }
-
-function GoogleColorIcon() {
-  return (
-    <View style={gStyles.wrapper}>
-      <Text style={gStyles.blue}>G</Text>
-    </View>
-  );
-}
-
-const gStyles = StyleSheet.create({
-  wrapper: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: Colors.white,
-    borderWidth: 1,
-    borderColor: '#DADCE0',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: Spacing.sm,
-  },
-  blue: { fontSize: 15, fontWeight: '700', color: '#4285F4' },
-});
 
 const styles = StyleSheet.create({
   container: {
@@ -241,19 +283,19 @@ const styles = StyleSheet.create({
   },
   logoContainer: {
     alignItems: 'center',
-    marginBottom: Spacing.xl,
-    marginTop: Spacing.sm,
+    marginBottom: Spacing.lg,
+    marginTop: Spacing.xs,
   },
   title: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '700',
     color: Colors.textMain,
     textAlign: 'center',
-    lineHeight: 34,
-    marginBottom: Spacing.sm,
+    lineHeight: 32,
+    marginBottom: Spacing.xs,
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: Colors.textSubtitle,
     textAlign: 'center',
     marginBottom: Spacing.xl,
@@ -273,20 +315,31 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   inputWrapper: {
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.base,
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.textMain,
+    marginBottom: 6,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.inputBackground,
     borderRadius: Radius.md,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: Colors.inputBorder,
     paddingHorizontal: Spacing.md,
-    height: 52,
+    height: 50,
+  },
+  inputFocused: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.white,
   },
   inputError: {
     borderColor: Colors.error,
+    backgroundColor: '#FFF5F5',
   },
   inputIcon: {
     marginRight: Spacing.sm,
@@ -299,24 +352,33 @@ const styles = StyleSheet.create({
   eyeIcon: {
     padding: 4,
   },
+  clearIcon: {
+    padding: 4,
+  },
   errorText: {
     fontSize: 12,
     color: Colors.error,
+    fontWeight: '500',
+  },
+  errorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginTop: 4,
-    marginLeft: 4,
+    marginLeft: 2,
+    gap: 4,
   },
   primaryButton: {
     backgroundColor: Colors.primary,
     borderRadius: Radius.md,
-    height: 52,
+    height: 50,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: Spacing.sm,
     shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.25,
     shadowRadius: 8,
-    elevation: 4,
+    elevation: 3,
   },
   primaryButtonDisabled: {
     opacity: 0.7,
@@ -327,7 +389,7 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: Colors.white,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     letterSpacing: 0.5,
   },
@@ -342,7 +404,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.divider,
   },
   dividerText: {
-    fontSize: 12,
+    fontSize: 11,
     color: Colors.textSubtitle,
     marginHorizontal: Spacing.md,
     fontWeight: '600',
@@ -355,11 +417,14 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     borderWidth: 1.5,
     borderColor: Colors.inputBorder,
-    height: 52,
+    height: 50,
     backgroundColor: Colors.white,
   },
+  googleIconContainer: {
+    marginRight: Spacing.sm,
+  },
   googleButtonText: {
-    fontSize: 15,
+    fontSize: 14,
     color: Colors.textMain,
     fontWeight: '500',
   },
@@ -374,7 +439,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: Spacing.md,
+    marginTop: Spacing.lg,
   },
   loginText: {
     fontSize: 13,
