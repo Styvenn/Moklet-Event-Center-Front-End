@@ -194,7 +194,7 @@ export default function LoginScreen() {
               />
               <TextInput
                 style={styles.input}
-                placeholder="nama@student.moklet.sch.id"
+                placeholder="nama@student.smktelkom-smk.sch.id"
                 placeholderTextColor={Colors.textPlaceholder}
                 value={email}
                 onChangeText={(v) => {
