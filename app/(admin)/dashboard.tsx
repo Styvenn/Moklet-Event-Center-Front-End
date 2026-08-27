@@ -12,8 +12,8 @@ import {
   ActivityIndicator,
   Modal,
   Pressable,
-  Image,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Colors, Spacing, Radius } from '../../constants/theme';
@@ -102,7 +102,7 @@ export default function AdminDashboardScreen() {
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           {avatarUrl ? (
-            <Image source={{ uri: avatarUrl }} style={styles.avatarImg} />
+            <Image source={avatarUrl} style={styles.avatarImg} cachePolicy="memory-disk" />
           ) : (
             <View style={styles.avatarBorder}>
               <View style={styles.avatarInner}>

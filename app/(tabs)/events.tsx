@@ -6,13 +6,13 @@ import {
   StyleSheet,
   SafeAreaView,
   Platform,
+  FlatList,
   TouchableOpacity,
-  ScrollView,
-  Image,
   TextInput,
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { Colors, Spacing, Radius } from '../../constants/theme';
@@ -88,6 +88,64 @@ export default function EventsScreen() {
       (e.description && e.description.toLowerCase().includes(search.toLowerCase()))
   );
 
+  const renderEvent = ({ item }: { item: EventItem }) => {
+    const isManaged = managedEventIds.has(item.id) || user?.role === 'PANITIA';
+    const isOngoing = item.status === 'ONGOING';
+
+    return (
+      <View style={styles.card}>
+        <View style={styles.bannerWrapper}>
+          {item.bannerUrl ? (
+            <Image
+              source={item.bannerUrl}
+              style={styles.banner}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              transition={150}
+            />
+          ) : (
+            <View style={styles.bannerPlaceholder}>
+              <Ionicons name="image-outline" size={32} color="#94A3B8" />
+              <Text style={styles.bannerPlaceholderText}>Banner tidak tersedia</Text>
+            </View>
+          )}
+          {isOngoing && (
+            <View style={styles.baruBadge}>
+              <Text style={styles.baruBadgeText}>Baru</Text>
+            </View>
+          )}
+        </View>
+        <View style={styles.cardBody}>
+          <Text style={styles.cardName} numberOfLines={2}>{item.name}</Text>
+          <View style={styles.cardMeta}>
+            <Ionicons name="calendar-outline" size={13} color="#757575" />
+            <Text style={styles.cardDate}>{formatDate(item.eventDate)}</Text>
+          </View>
+          <View style={styles.cardActionRow}>
+            {isManaged ? (
+              <TouchableOpacity
+                style={styles.kelolaBtn}
+                activeOpacity={0.85}
+                onPress={() => router.push({ pathname: '/(panitia)/events/[id]', params: { id: item.id } } as any)}
+              >
+                <Text style={styles.kelolaBtnText}>Kelola</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={styles.detailBtn}
+                activeOpacity={0.85}
+                onPress={() => router.push({ pathname: '/event-detail', params: { eventId: item.id } })}
+              >
+                <Text style={styles.detailBtnText}>Lihat Detail</Text>
+                <Ionicons name="chevron-forward" size={16} color="#B81414" />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       {/* Header (Screenshot 3) */}
@@ -114,105 +172,40 @@ export default function EventsScreen() {
         </View>
       </View>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.list}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[Colors.primary]}
-          />
-        }
-      >
-        {loading ? (
-          <View style={styles.centerBox}>
-            <ActivityIndicator size="large" color={Colors.primary} />
-          </View>
-        ) : filtered.length > 0 ? (
-          filtered.map((item) => {
-            const isManaged = managedEventIds.has(item.id) || user?.role === 'PANITIA';
-            const isOngoing = item.status === 'ONGOING';
-
-            return (
-              <View key={item.id} style={styles.card}>
-                {/* Banner with Badge */}
-                <View style={styles.bannerWrapper}>
-                  <Image
-                    source={{
-                      uri:
-                        item.bannerUrl ||
-                        'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800&q=80',
-                    }}
-                    style={styles.banner}
-                  />
-                  {isOngoing && (
-                    <View style={styles.baruBadge}>
-                      <Text style={styles.baruBadgeText}>Baru</Text>
-                    </View>
-                  )}
-                </View>
-
-                {/* Content */}
-                <View style={styles.cardBody}>
-                  <Text style={styles.cardName} numberOfLines={2}>
-                    {item.name}
-                  </Text>
-                  <View style={styles.cardMeta}>
-                    <Ionicons name="calendar-outline" size={13} color="#757575" />
-                    <Text style={styles.cardDate}>{formatDate(item.eventDate)}</Text>
-                  </View>
-
-                  <View style={styles.cardActionRow}>
-                    {isManaged ? (
-                      /* If committee member -> Kelola Button (Screenshot 3) */
-                      <TouchableOpacity
-                        style={styles.kelolaBtn}
-                        activeOpacity={0.85}
-                        onPress={() =>
-                          router.push({
-                            pathname: '/(panitia)/events/[id]',
-                            params: { id: item.id },
-                          } as any)
-                        }
-                      >
-                        <Text style={styles.kelolaBtnText}>Kelola</Text>
-                      </TouchableOpacity>
-                    ) : (
-                      /* Regular Student -> Lihat Detail / Daftar */
-                      <TouchableOpacity
-                        style={styles.detailBtn}
-                        activeOpacity={0.85}
-                        onPress={() =>
-                          router.push({
-                            pathname: '/event-detail',
-                            params: { eventId: item.id },
-                          })
-                        }
-                      >
-                        <Text style={styles.detailBtnText}>Lihat Detail</Text>
-                        <Ionicons name="chevron-forward" size={16} color="#B81414" />
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                </View>
-              </View>
-            );
-          })
-        ) : (
-          <View style={styles.centerBox}>
-            <Ionicons name="calendar-outline" size={48} color="#BDBDBD" />
-            <Text style={styles.emptyTitle}>
-              {search ? 'Event tidak ditemukan' : 'Belum ada event'}
-            </Text>
-            <Text style={styles.emptySub}>
-              {search
-                ? 'Coba gunakan kata kunci pencarian lain.'
-                : 'Event yang akan datang akan muncul di sini.'}
-            </Text>
-          </View>
-        )}
-      </ScrollView>
+      {loading ? (
+        <View style={styles.centerBox}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+      ) : (
+        <FlatList
+          data={filtered}
+          renderItem={renderEvent}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          ItemSeparatorComponent={() => <View style={{ height: Spacing.base }} />}
+          initialNumToRender={5}
+          maxToRenderPerBatch={5}
+          windowSize={7}
+          removeClippedSubviews
+          ListEmptyComponent={(
+            <View style={styles.centerBox}>
+              <Ionicons name="calendar-outline" size={48} color="#BDBDBD" />
+              <Text style={styles.emptyTitle}>{search ? 'Event tidak ditemukan' : 'Belum ada event'}</Text>
+              <Text style={styles.emptySub}>
+                {search ? 'Coba gunakan kata kunci pencarian lain.' : 'Event yang akan datang akan muncul di sini.'}
+              </Text>
+            </View>
+          )}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[Colors.primary]}
+            />
+          }
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -281,6 +274,18 @@ const styles = StyleSheet.create({
   banner: {
     width: '100%',
     height: '100%',
+  },
+  bannerPlaceholder: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E5E7EB',
+  },
+  bannerPlaceholderText: {
+    marginTop: 6,
+    fontSize: 12,
+    color: '#64748B',
   },
   baruBadge: {
     position: 'absolute',

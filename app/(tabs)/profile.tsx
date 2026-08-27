@@ -9,8 +9,8 @@ import {
   TouchableOpacity,
   Modal,
   Pressable,
-  Image,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Colors, Spacing, Radius } from '../../constants/theme';
@@ -34,7 +34,7 @@ export default function ProfileScreen() {
         {/* Center Avatar & Info (Image 2) */}
         <View style={styles.profileHeader}>
           {avatarUrl ? (
-            <Image source={{ uri: avatarUrl }} style={styles.avatarImg} />
+            <Image source={avatarUrl} style={styles.avatarImg} cachePolicy="memory-disk" />
           ) : (
             <View style={styles.avatarCircle}>
               <Ionicons name="person" size={54} color="#FFFFFF" />

@@ -7,7 +7,7 @@ import {
   SafeAreaView,
   Platform,
   TouchableOpacity,
-  ScrollView,
+  FlatList,
   TextInput,
   ActivityIndicator,
 } from 'react-native';
@@ -109,35 +109,37 @@ export default function ArsipPengumumanScreen() {
           <Text style={styles.stateText}>Gagal memuat pengumuman.</Text>
         </View>
       ) : (
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.list}>
-          {filtered.length === 0 ? (
+        <FlatList
+          data={filtered}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item: ann }) => (
+            <TouchableOpacity style={styles.annCard} activeOpacity={0.85}>
+              <View style={styles.annContent}>
+                <View style={styles.annTopRow}>
+                  <Text style={styles.annTitle} numberOfLines={2}>{ann.title}</Text>
+                </View>
+                <Text style={styles.annDesc} numberOfLines={2}>{ann.content}</Text>
+                <View style={styles.annFooter}>
+                  <Ionicons name="calendar-outline" size={11} color={Colors.textSubtitle} />
+                  <Text style={styles.annDate}>{formatDate(ann.createdAt)}</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          )}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          ItemSeparatorComponent={() => <View style={{ height: Spacing.md }} />}
+          initialNumToRender={8}
+          maxToRenderPerBatch={8}
+          windowSize={7}
+          removeClippedSubviews
+          ListEmptyComponent={(
             <View style={styles.centerState}>
               <Ionicons name="megaphone-outline" size={40} color={Colors.textSubtitle} />
               <Text style={styles.stateText}>Tidak ada pengumuman ditemukan.</Text>
             </View>
-          ) : (
-            filtered.map((ann) => (
-              <TouchableOpacity key={ann.id} style={styles.annCard} activeOpacity={0.85}>
-                {/* Content */}
-                <View style={styles.annContent}>
-                  <View style={styles.annTopRow}>
-                    <Text style={styles.annTitle} numberOfLines={2}>
-                      {ann.title}
-                    </Text>
-                  </View>
-                  <Text style={styles.annDesc} numberOfLines={2}>
-                    {ann.content}
-                  </Text>
-                  <View style={styles.annFooter}>
-                    <Ionicons name="calendar-outline" size={11} color={Colors.textSubtitle} />
-                    <Text style={styles.annDate}>{formatDate(ann.createdAt)}</Text>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            ))
           )}
-          <View style={{ height: 16 }} />
-        </ScrollView>
+        />
       )}
     </SafeAreaView>
   );

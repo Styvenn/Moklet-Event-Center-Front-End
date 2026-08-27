@@ -6,7 +6,7 @@ import {
   StyleSheet,
   SafeAreaView,
   Platform,
-  ScrollView,
+  FlatList,
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
@@ -80,9 +80,72 @@ export default function HistoryScreen() {
         <Text style={styles.headerSub}>Semua pendaftaran event Anda</Text>
       </View>
 
-      <ScrollView
+      <FlatList
+        data={loading ? [] : historyList}
+        keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.list}
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            style={styles.card}
+            activeOpacity={item.teamId ? 0.75 : 1}
+            onPress={() => handleCardPress(item)}
+          >
+            <View style={styles.cardTop}>
+              <View style={[styles.iconBox, { backgroundColor: item.statusBg }]}>
+                <Ionicons name={getCategoryIcon(item.categoryName)} size={20} color={item.statusColor} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.eventName}>{item.eventName}</Text>
+                <Text style={styles.branchName}>{item.categoryName}</Text>
+              </View>
+              <View style={[styles.badge, { backgroundColor: item.statusBg }]}>
+                <Text style={[styles.badgeText, { color: item.statusColor }]}>{item.statusLabel}</Text>
+              </View>
+            </View>
+            <View style={styles.divider} />
+            <View style={styles.cardBottom}>
+              <View style={[styles.metaRow, styles.metaColumn]}>
+                <Ionicons name="calendar-outline" size={13} color={Colors.textSubtitle} />
+                <Text style={styles.metaText} numberOfLines={1}>{item.dateFormatted}</Text>
+              </View>
+              <View style={[styles.metaRow, styles.metaColumn, styles.teamColumn]}>
+                <Ionicons name={item.isIndividual ? 'person-outline' : 'people-outline'} size={13} color={Colors.textSubtitle} />
+                <Text style={styles.metaText} numberOfLines={1}>{shortenName(item.teamName)}</Text>
+              </View>
+              {item.teamId ? (
+                <View style={[styles.metaRow, styles.metaColumn, styles.viewRoomColumn]}>
+                  <Text style={styles.viewRoomText}>Lihat Tim {'->'}</Text>
+                </View>
+              ) : null}
+            </View>
+          </TouchableOpacity>
+        )}
+        ItemSeparatorComponent={() => <View style={{ height: Spacing.md }} />}
+        initialNumToRender={8}
+        maxToRenderPerBatch={8}
+        windowSize={7}
+        removeClippedSubviews
+        ListHeaderComponent={errorMsg ? (
+          <View style={styles.errorBox}>
+            <Ionicons name="alert-circle-outline" size={18} color={Colors.error} />
+            <Text style={styles.errorText}>{errorMsg}</Text>
+          </View>
+        ) : loading ? (
+          <View style={styles.centerBox}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+            <Text style={styles.loadingText}>Memuat riwayat pendaftaran...</Text>
+          </View>
+        ) : null}
+        ListEmptyComponent={!loading && !errorMsg ? (
+          <View style={styles.emptyContainer}>
+            <View style={styles.emptyIconBox}>
+              <Ionicons name="receipt-outline" size={48} color={Colors.textPlaceholder} />
+            </View>
+            <Text style={styles.emptyTitle}>Belum Ada Riwayat Pendaftaran</Text>
+            <Text style={styles.emptySubtitle}>Pendaftaran event yang kamu ikuti akan muncul di sini.</Text>
+          </View>
+        ) : null}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -90,88 +153,9 @@ export default function HistoryScreen() {
             colors={[Colors.primary]}
           />
         }
-      >
-        {/* Error Banner */}
-        {errorMsg ? (
-          <View style={styles.errorBox}>
-            <Ionicons name="alert-circle-outline" size={18} color={Colors.error} />
-            <Text style={styles.errorText}>{errorMsg}</Text>
-          </View>
-        ) : null}
-
-        {loading ? (
-          <View style={styles.centerBox}>
-            <ActivityIndicator size="large" color={Colors.primary} />
-            <Text style={styles.loadingText}>Memuat riwayat pendaftaran...</Text>
-          </View>
-        ) : historyList.length > 0 ? (
-          historyList.map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              style={styles.card}
-              activeOpacity={item.teamId ? 0.75 : 1}
-              onPress={() => handleCardPress(item)}
-            >
-              {/* Top row: event + badge */}
-              <View style={styles.cardTop}>
-                <View style={[styles.iconBox, { backgroundColor: item.statusBg }]}>
-                  <Ionicons
-                    name={getCategoryIcon(item.categoryName)}
-                    size={20}
-                    color={item.statusColor}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.eventName}>{item.eventName}</Text>
-                  <Text style={styles.branchName}>{item.categoryName}</Text>
-                </View>
-                <View style={[styles.badge, { backgroundColor: item.statusBg }]}>
-                  <Text style={[styles.badgeText, { color: item.statusColor }]}>
-                    {item.statusLabel}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Divider */}
-              <View style={styles.divider} />
-
-              {/* Bottom row: date + team */}
-              <View style={styles.cardBottom}>
-                <View style={[styles.metaRow, styles.metaColumn]}>
-                  <Ionicons name="calendar-outline" size={13} color={Colors.textSubtitle} />
-                  <Text style={styles.metaText} numberOfLines={1}>{item.dateFormatted}</Text>
-                </View>
-                <View style={[styles.metaRow, styles.metaColumn, styles.teamColumn]}>
-                  <Ionicons
-                    name={item.isIndividual ? 'person-outline' : 'people-outline'}
-                    size={13}
-                    color={Colors.textSubtitle}
-                  />
-                  <Text style={styles.metaText} numberOfLines={1}>{shortenName(item.teamName)}</Text>
-                </View>
-                {item.teamId ? (
-                  <View style={[styles.metaRow, styles.metaColumn, styles.viewRoomColumn]}>
-                    <Text style={styles.viewRoomText}>Lihat Tim {'->'}</Text>
-                  </View>
-                ) : null}
-              </View>
-            </TouchableOpacity>
-          ))
-        ) : (
-          <View style={styles.emptyContainer}>
-            <View style={styles.emptyIconBox}>
-              <Ionicons name="receipt-outline" size={48} color={Colors.textPlaceholder} />
-            </View>
-            <Text style={styles.emptyTitle}>Belum Ada Riwayat Pendaftaran</Text>
-            <Text style={styles.emptySubtitle}>
-              Pendaftaran event yang kamu ikuti akan muncul di sini.
-            </Text>
-          </View>
-        )}
-
-        {/* Empty padding bottom */}
-        <View style={{ height: 16 }} />
-      </ScrollView>
+        
+        ListFooterComponent={<View style={{ height: 16 }} />}
+      />
     </SafeAreaView>
   );
 }

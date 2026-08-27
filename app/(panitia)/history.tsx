@@ -2,8 +2,9 @@
 import React, { useState, useCallback } from "react";
 import {
   View, Text, StyleSheet, SafeAreaView, Platform, FlatList,
-  TouchableOpacity, ActivityIndicator, RefreshControl, Image,
+  TouchableOpacity, ActivityIndicator, RefreshControl,
 } from "react-native";
+import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import { Colors, Spacing, Radius } from "../../constants/theme";
@@ -47,7 +48,13 @@ export default function HistoryEventsScreen() {
       onPress={() => router.push({ pathname: "/(panitia)/events/[id]", params: { id: item.id } } as any)}
     >
       {item.bannerUrl ? (
-        <Image source={{ uri: item.bannerUrl }} style={styles.banner} />
+        <Image
+          source={item.bannerUrl}
+          style={styles.banner}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+          transition={150}
+        />
       ) : (
         <View style={styles.bannerPlaceholder}>
           <Ionicons name="image-outline" size={32} color="#BDBDBD" />

@@ -8,13 +8,13 @@ import {
   Platform,
   TouchableOpacity,
   ScrollView,
-  Image,
   Dimensions,
   Modal,
   Pressable,
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { Colors, Spacing, Radius } from '../../constants/theme';
@@ -153,7 +153,7 @@ export default function HomeScreen() {
           <View style={styles.header}>
             <View style={styles.headerProfile}>
               {user?.student?.avatarUrl ? (
-                <Image source={{ uri: user.student.avatarUrl }} style={styles.avatarImg} />
+                <Image source={user.student.avatarUrl} style={styles.avatarImg} cachePolicy="memory-disk" />
               ) : (
                 <View style={styles.avatarCircle}>
                   <Text style={styles.avatarInitial}>{studentName.charAt(0).toUpperCase()}</Text>
@@ -209,14 +209,20 @@ export default function HomeScreen() {
                   return (
                     <View key={ev.id} style={styles.eventCard}>
                       <View style={styles.bannerWrapper}>
-                        <Image
-                          source={{
-                            uri:
-                              ev.bannerUrl ||
-                              'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800&q=80',
-                          }}
-                          style={styles.eventBanner}
-                        />
+                        {ev.bannerUrl ? (
+                          <Image
+                            source={ev.bannerUrl}
+                            style={styles.eventBanner}
+                            contentFit="cover"
+                            cachePolicy="memory-disk"
+                            transition={150}
+                          />
+                        ) : (
+                          <View style={styles.bannerPlaceholder}>
+                            <Ionicons name="image-outline" size={32} color="#94A3B8" />
+                            <Text style={styles.bannerPlaceholderText}>Banner tidak tersedia</Text>
+                          </View>
+                        )}
                         <View
                           style={[
                             styles.statusBadgeOverlay,
@@ -381,14 +387,20 @@ export default function HomeScreen() {
                     router.push({ pathname: '/event-detail', params: { eventId: banner.id } })
                   }
                 >
-                  <Image
-                    source={{
-                      uri:
-                        banner.bannerUrl ||
-                        'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=800&q=80',
-                    }}
-                    style={styles.bannerImage}
-                  />
+                  {banner.bannerUrl ? (
+                    <Image
+                      source={banner.bannerUrl}
+                      style={styles.bannerImage}
+                      contentFit="cover"
+                      cachePolicy="memory-disk"
+                      transition={150}
+                    />
+                  ) : (
+                    <View style={styles.bannerPlaceholder}>
+                      <Ionicons name="image-outline" size={32} color="#94A3B8" />
+                      <Text style={styles.bannerPlaceholderText}>Banner tidak tersedia</Text>
+                    </View>
+                  )}
                   <View style={styles.bannerOverlay} />
                   <View style={styles.bannerTag}>
                     <Text style={styles.bannerTagText}>{banner.status || 'EVENT'}</Text>
@@ -598,6 +610,18 @@ const styles = StyleSheet.create({
   eventBanner: {
     width: '100%',
     height: '100%',
+  },
+  bannerPlaceholder: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E5E7EB',
+  },
+  bannerPlaceholderText: {
+    marginTop: 6,
+    fontSize: 12,
+    color: '#64748B',
   },
   statusBadgeOverlay: {
     position: 'absolute',

@@ -16,7 +16,7 @@ export default function MokletLogo({ size = 'medium', style, imageStyle }: Props
   return (
     <View style={[styles.container, style]}>
       <Image
-        source={require('../assets/logo.png')}
+        source={require('../assets/logo.webp')}
         style={[
           styles.logoImage,
           { width: baseWidth, height: baseHeight },

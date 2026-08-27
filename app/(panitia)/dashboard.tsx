@@ -10,11 +10,11 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-  Image,
   Alert,
   Modal,
   Pressable,
 } from "react-native";
+import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import { Colors, Spacing, Radius } from "../../constants/theme";
@@ -83,7 +83,7 @@ export default function PanitiaDashboardScreen() {
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           {avatarUrl ? (
-            <Image source={{ uri: avatarUrl }} style={styles.avatarImg} />
+            <Image source={avatarUrl} style={styles.avatarImg} cachePolicy="memory-disk" />
           ) : (
             <View style={styles.avatarCircle}>
               <Text style={styles.avatarInitial}>

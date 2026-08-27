@@ -9,7 +9,6 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Image,
   Modal,
   TextInput,
   FlatList,
@@ -17,6 +16,7 @@ import {
   RefreshControl,
   Linking,
 } from "react-native";
+import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, router, useFocusEffect } from "expo-router";
 import { Colors, Spacing, Radius } from "../../../../constants/theme";
@@ -338,14 +338,20 @@ export default function EventDetailScreen() {
       >
         {/* Banner Section */}
         <View style={styles.bannerWrapper}>
-          <Image
-            source={{
-              uri:
-                event.bannerUrl ||
-                "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1000&q=80",
-            }}
-            style={styles.bannerImg}
-          />
+          {event.bannerUrl ? (
+            <Image
+              source={event.bannerUrl}
+              style={styles.bannerImg}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              transition={150}
+            />
+          ) : (
+            <View style={styles.bannerPlaceholder}>
+              <Ionicons name="image-outline" size={36} color="#94A3B8" />
+              <Text style={styles.bannerPlaceholderText}>Banner tidak tersedia</Text>
+            </View>
+          )}
           <TouchableOpacity
             style={styles.backFab}
             onPress={() => router.back()}
@@ -597,7 +603,7 @@ export default function EventDetailScreen() {
                   return (
                     <View key={mem.studentId} style={styles.memberCard}>
                       {mem.avatarUrl ? (
-                        <Image source={{ uri: mem.avatarUrl }} style={styles.memberAvatarImg} />
+                        <Image source={mem.avatarUrl} style={styles.memberAvatarImg} cachePolicy="memory-disk" />
                       ) : (
                         <View
                           style={[
@@ -844,6 +850,18 @@ const styles = StyleSheet.create({
   retryText: { color: "#fff", fontWeight: "700", fontSize: 14 },
   bannerWrapper: { width: "100%", height: 180, position: "relative" },
   bannerImg: { width: "100%", height: "100%" },
+  bannerPlaceholder: {
+    width: "100%",
+    height: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#E5E7EB",
+  },
+  bannerPlaceholderText: {
+    marginTop: 6,
+    fontSize: 12,
+    color: "#64748B",
+  },
   backFab: {
     position: "absolute",
     top: 14,

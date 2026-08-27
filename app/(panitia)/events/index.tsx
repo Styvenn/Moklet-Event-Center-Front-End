@@ -10,9 +10,9 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-  Image,
   TextInput,
 } from "react-native";
+import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import { Colors, Spacing, Radius } from "../../../constants/theme";
@@ -74,14 +74,20 @@ export default function EventsListScreen() {
       <View style={styles.card}>
         {/* Banner with Badge */}
         <View style={styles.bannerWrapper}>
-          <Image
-            source={{
-              uri:
-                item.bannerUrl ||
-                "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800&q=80",
-            }}
-            style={styles.banner}
-          />
+          {item.bannerUrl ? (
+            <Image
+              source={item.bannerUrl}
+              style={styles.banner}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              transition={150}
+            />
+          ) : (
+            <View style={styles.bannerPlaceholder}>
+              <Ionicons name="image-outline" size={32} color="#94A3B8" />
+              <Text style={styles.bannerPlaceholderText}>Banner tidak tersedia</Text>
+            </View>
+          )}
           {isOngoing && (
             <View style={styles.baruBadge}>
               <Text style={styles.baruBadgeText}>Baru</Text>
@@ -278,6 +284,18 @@ const styles = StyleSheet.create({
   banner: {
     width: "100%",
     height: "100%",
+  },
+  bannerPlaceholder: {
+    width: "100%",
+    height: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#E5E7EB",
+  },
+  bannerPlaceholderText: {
+    marginTop: 6,
+    fontSize: 12,
+    color: "#64748B",
   },
   baruBadge: {
     position: "absolute",

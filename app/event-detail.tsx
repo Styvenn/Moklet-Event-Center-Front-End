@@ -8,11 +8,11 @@ import {
   Platform,
   TouchableOpacity,
   ScrollView,
-  Image,
   ActivityIndicator,
   Linking,
   Alert,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Colors, Spacing, Radius } from '../constants/theme';
@@ -144,14 +144,20 @@ export default function EventDetailScreen() {
         contentContainerStyle={{ paddingBottom: 100 }}
       >
         {/* 1. Banner */}
-        <Image
-          source={{
-            uri:
-              event.bannerUrl ||
-              'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=1000&q=80',
-          }}
-          style={styles.banner}
-        />
+        {event.bannerUrl ? (
+          <Image
+            source={event.bannerUrl}
+            style={styles.banner}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            transition={150}
+          />
+        ) : (
+          <View style={styles.bannerPlaceholder}>
+            <Ionicons name="image-outline" size={42} color={Colors.textSubtitle} />
+            <Text style={styles.bannerPlaceholderText}>Banner tidak tersedia</Text>
+          </View>
+        )}
 
         {/* 2. Judul & Tanggal Event */}
         <View style={styles.titleCard}>
@@ -314,6 +320,18 @@ const styles = StyleSheet.create({
   banner: {
     width: '100%',
     height: 220,
+  },
+  bannerPlaceholder: {
+    width: '100%',
+    height: 220,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E5E7EB',
+  },
+  bannerPlaceholderText: {
+    marginTop: 8,
+    fontSize: 13,
+    color: Colors.textSubtitle,
   },
   titleCard: {
     backgroundColor: Colors.white,
