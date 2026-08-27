@@ -104,7 +104,7 @@ function SwipeableBottomModal({
 
   const panResponder = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 5,
+      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 10 && Math.abs(gs.dy) > Math.abs(gs.dx),
       onPanResponderMove: (_, gs) => {
         if (gs.dy > 0) translateY.setValue(gs.dy);
       },
@@ -127,9 +127,12 @@ function SwipeableBottomModal({
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
       {/* Backdrop */}
       <TouchableOpacity style={ms.overlay} activeOpacity={1} onPress={onClose} />
-      <Animated.View style={[ms.sheet, { transform: [{ translateY }] }]}>
+      <Animated.View
+        {...panResponder.panHandlers}
+        style={[ms.sheet, { transform: [{ translateY }] }]}
+      >
         {/* Drag handle */}
-        <View {...panResponder.panHandlers} style={{ paddingTop: 8, paddingBottom: 4, alignItems: "center" }}>
+        <View style={{ paddingTop: 8, paddingBottom: 4, alignItems: "center" }}>
           <View style={ms.handle} />
         </View>
         {children}
