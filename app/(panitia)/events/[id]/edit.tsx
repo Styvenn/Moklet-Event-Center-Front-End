@@ -16,12 +16,15 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, router } from "expo-router";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "../../../../constants/query";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import { Colors, Spacing, Radius } from "../../../../constants/theme";
 import { getEventById, updateEvent, updateEventStatus, uploadBanner, uploadGuidebook } from "../../../../services/panitia/events.service";
 
 export default function EditEventScreen() {
+  const queryClient = useQueryClient();
   const { id } = useLocalSearchParams<{ id: string }>();
   const eventId = Array.isArray(id) ? id[0] : id;
 
@@ -122,6 +125,15 @@ export default function EditEventScreen() {
       if (guidebookUri) {
         try { await uploadGuidebook(eventId, guidebookUri); } catch (e) { console.warn(e); }
       }
+
+      // Sinkronkan cache: list panitia, detail event, dan layar siswa ter-update.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.managedEvents }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.panitiaEventDetail(eventId) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.eventDetail(eventId) }),
+        queryClient.invalidateQueries({ queryKey: ['events'] }),
+        queryClient.invalidateQueries({ queryKey: ['home'] }),
+      ]);
 
       setLoading(false);
       Alert.alert("Sukses", "Perubahan event berhasil disimpan!", [

@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import api, { tokenStorage, ApiErrorResponse } from '../services/api';
 import { router } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 
 export interface StudentProfile {
   id: string;
@@ -42,6 +43,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<UserAccount | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -132,6 +134,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     await tokenStorage.removeItem();
+    // Hapus seluruh cache query agar data akun sebelumnya
+    // tidak tersisa saat siswa lain login di HP yang sama.
+    queryClient.clear();
     setToken(null);
     setUser(null);
     router.replace('/login');

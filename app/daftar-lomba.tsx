@@ -1,5 +1,5 @@
 // app/daftar-lomba.tsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -18,7 +18,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Colors, Spacing, Radius } from '../constants/theme';
+import { cacheTime, queryKeys } from '../constants/query';
 import api from '../services/api';
 import {
   getCategoriesByEvent,
@@ -36,12 +38,7 @@ import { getCategoryIcon } from '../utils/icons';
 export default function DaftarLombaScreen() {
   const { eventId } = useLocalSearchParams<{ eventId?: string }>();
   const currentEventId = eventId || '';
-
-  const [eventData, setEventData] = useState<EventItem | null>(null);
-  const [categories, setCategories] = useState<CategoryItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   // Modal States
   const [selectedCategory, setSelectedCategory] = useState<CategoryItem | null>(null);
@@ -55,36 +52,45 @@ export default function DaftarLombaScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
 
-  const loadData = useCallback(async (isRefresh = false) => {
-    if (!currentEventId) {
-      setErrorMsg('ID Event tidak valid.');
-      setLoading(false);
-      return;
-    }
-
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
-    setErrorMsg(null);
-
-    try {
+  const {
+    data,
+    isLoading,
+    isRefetching,
+    error,
+    refetch,
+  } = useQuery<{ eventData: EventItem | null; categories: CategoryItem[] }>({
+    queryKey: queryKeys.eventCategories(currentEventId),
+    enabled: !!currentEventId,
+    staleTime: cacheTime.hot,
+    queryFn: async () => {
       const [ev, cats] = await Promise.all([
         getEventById(currentEventId).catch(() => null),
         getCategoriesByEvent(currentEventId).catch(() => []),
       ]);
-      setEventData(ev);
-      setCategories(cats);
-    } catch (err: any) {
-      console.warn('Error loading categories:', err);
-      setErrorMsg(err?.formattedMessage || 'Gagal memuat cabang lomba.');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [currentEventId]);
+      return { eventData: ev, categories: cats };
+    },
+  });
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  const eventData = data?.eventData || null;
+  const categories = data?.categories || [];
+
+  const errorMsg = !currentEventId
+    ? 'ID Event tidak valid.'
+    : error
+      ? (error as any)?.formattedMessage || 'Gagal memuat cabang lomba.'
+      : null;
+
+  const invalidateRegistrationData = async (teamId?: string) => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.registrationHistory }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.eventCategories(currentEventId) }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.eventDetail(currentEventId) }),
+      queryClient.invalidateQueries({ queryKey: ['home'] }),
+      teamId
+        ? queryClient.invalidateQueries({ queryKey: queryKeys.team(teamId) })
+        : Promise.resolve(),
+    ]);
+  };
 
   const handleCategoryPress = (category: CategoryItem) => {
     setSelectedCategory(category);
@@ -110,9 +116,11 @@ export default function DaftarLombaScreen() {
   };
 
   const handleIndividualRegistration = async (categoryId: string) => {
-    setLoading(true);
+    setSubmitting(true);
     try {
       await registerIndividual(categoryId);
+      // Sinkronkan cache: riwayat & kuota langsung ter-update di semua layar.
+      await invalidateRegistrationData();
       Alert.alert(
         'Pendaftaran Berhasil!',
         'Anda telah berhasil mendaftar ke cabang lomba ini.',
@@ -129,7 +137,7 @@ export default function DaftarLombaScreen() {
         err?.formattedMessage || err?.message || 'Gagal melakukan pendaftaran. Silakan coba lagi.'
       );
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
@@ -163,6 +171,7 @@ export default function DaftarLombaScreen() {
 
     try {
       const team = await joinTeam(cleanCode);
+      await invalidateRegistrationData(team.id);
       setShowEnterCodeModal(false);
       Alert.alert('Berhasil Bergabung!', `Kamu telah bergabung dengan tim ${team.name}.`, [
         {
@@ -193,6 +202,7 @@ export default function DaftarLombaScreen() {
 
     try {
       const team = await createTeam(cleanName, selectedCategory.id);
+      await invalidateRegistrationData(team.id);
       setShowCreateTeamModal(false);
       Alert.alert('Room Tim Dibuat!', `Tim "${team.name}" berhasil dibuat. Kode tim: ${team.code}`, [
         {
@@ -227,7 +237,7 @@ export default function DaftarLombaScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      {loading ? (
+      {isLoading || submitting ? (
         <View style={styles.centerBox}>
           <ActivityIndicator size="large" color={Colors.primary} />
           <Text style={styles.loadingText}>Memuat cabang lomba...</Text>
@@ -238,8 +248,8 @@ export default function DaftarLombaScreen() {
           contentContainerStyle={styles.list}
           refreshControl={
             <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => loadData(true)}
+              refreshing={isRefetching}
+              onRefresh={refetch}
               colors={[Colors.primary]}
             />
           }

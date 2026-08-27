@@ -1,5 +1,5 @@
 // app/(tabs)/events.tsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -14,8 +14,10 @@ import {
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { router, useFocusEffect } from 'expo-router';
+import { router } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
 import { Colors, Spacing, Radius } from '../../constants/theme';
+import { cacheTime, queryKeys } from '../../constants/query';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 import { formatDate } from '../../utils/date';
@@ -26,48 +28,28 @@ import {
 
 export default function EventsScreen() {
   const { user } = useAuth();
-  const [events, setEvents] = useState<EventItem[]>([]);
-  const [managedEventIds, setManagedEventIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
 
-  const fetchEvents = useCallback(async () => {
-    try {
+  const { data, isLoading, isRefetching, refetch } = useQuery({
+    queryKey: queryKeys.events(user?.student?.id, user?.id),
+    staleTime: cacheTime.warm,
+    queryFn: async () => {
       const [allRes, managedRes] = await Promise.allSettled([
         api.get('/events'),
         getManagedEventsForStudent(user?.student?.id, user?.id),
       ]);
 
-      if (allRes.status === 'fulfilled') {
-        const raw = allRes.value;
-        const list = Array.isArray(raw) ? raw : (raw as any)?.data || [];
-        setEvents(list);
-      }
+      const raw = allRes.status === 'fulfilled' ? allRes.value : [];
+      const events: EventItem[] = Array.isArray(raw) ? raw : (raw as any)?.data || [];
+      const managedEventIds = new Set(
+        managedRes.status === 'fulfilled' ? managedRes.value.map((e) => e.id) : [],
+      );
+      return { events, managedEventIds };
+    },
+  });
 
-      if (managedRes.status === 'fulfilled') {
-        const ids = new Set(managedRes.value.map((e) => e.id));
-        setManagedEventIds(ids);
-      }
-    } catch (err) {
-      console.warn('Error fetching events:', err);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [user?.student?.id, user?.id]);
-
-  useFocusEffect(
-    useCallback(() => {
-      setLoading(true);
-      fetchEvents();
-    }, [fetchEvents])
-  );
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchEvents();
-  };
+  const events = data?.events || [];
+  const managedEventIds = data?.managedEventIds || new Set<string>();
 
   const filtered = events.filter(
     (e) =>
@@ -159,7 +141,7 @@ export default function EventsScreen() {
         </View>
       </View>
 
-      {loading ? (
+      {isLoading && !data ? (
         <View style={styles.centerBox}>
           <ActivityIndicator size="large" color={Colors.primary} />
         </View>
@@ -186,8 +168,8 @@ export default function EventsScreen() {
           )}
           refreshControl={
             <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
+              refreshing={isRefetching}
+              onRefresh={refetch}
               colors={[Colors.primary]}
             />
           }

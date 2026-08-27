@@ -17,9 +17,10 @@ import {
   Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from 'expo-router';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius } from '../../constants/theme';
+import { cacheTime, queryKeys } from '../../constants/query';
 import {
   createPanitia,
   getPanitia,
@@ -211,37 +212,28 @@ function CreatePanitiaModal({ visible, onClose, onSuccess }: CreatePanitiaModalP
 // ─── Main Screen ───────────────────────────────────────────────────────────────
 
 export default function PanitiaScreen() {
-  const [panitiaList, setPanitiaList] = useState<PanitiaItem[]>([]);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [showModal, setShowModal] = useState(false);
 
-  const fetchPanitiaList = useCallback(async () => {
-    try {
-      const list = await getPanitia();
-      setPanitiaList(list || []);
-    } catch (e: any) {
-      console.warn('Failed to fetch panitia list:', e);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+  const { data: panitiaList = [], isLoading, isRefetching, refetch } = useQuery<PanitiaItem[]>({
+    queryKey: queryKeys.adminPanitia,
+    staleTime: cacheTime.warm,
+    queryFn: async () => (await getPanitia()) || [],
+  });
 
-  useFocusEffect(
-    useCallback(() => {
-      fetchPanitiaList();
-    }, [fetchPanitiaList])
-  );
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchPanitiaList();
+  const invalidatePanitiaData = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.adminPanitia }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.adminStats }),
+    ]);
   };
 
+  const onRefresh = () => refetch();
+
   const handlePanitiaCreated = (newPanitia: PanitiaItem) => {
-    setPanitiaList((prev) => [newPanitia, ...prev.filter((p) => p.email !== newPanitia.email)]);
+    void newPanitia;
+    invalidatePanitiaData();
     setShowModal(false);
   };
 
@@ -255,15 +247,10 @@ export default function PanitiaScreen() {
         {
           text: 'Ya, Ubah',
           onPress: async () => {
-            setPanitiaList((prev) =>
-              prev.map((p) => (p.id === item.id ? { ...p, isActive: nextStatus } : p))
-            );
             try {
               await togglePanitiaStatus(item.id, nextStatus);
+              await invalidatePanitiaData();
             } catch (err: any) {
-              setPanitiaList((prev) =>
-                prev.map((p) => (p.id === item.id ? { ...p, isActive: item.isActive } : p))
-              );
               Alert.alert('Gagal', getErrorMessage(err, 'Gagal mengubah status panitia.'));
             }
           },
@@ -282,12 +269,12 @@ export default function PanitiaScreen() {
           text: 'Hapus',
           style: 'destructive',
           onPress: async () => {
-            setPanitiaList((prev) => prev.filter((p) => p.id !== item.id));
             try {
               await deletePanitia(item.id);
+              await invalidatePanitiaData();
             } catch (err: any) {
               Alert.alert('Gagal', getErrorMessage(err, 'Tidak dapat menghapus akun panitia.'));
-              fetchPanitiaList();
+              invalidatePanitiaData();
             }
           },
         },
@@ -389,7 +376,7 @@ export default function PanitiaScreen() {
       </Text>
 
       {/* List */}
-      {loading ? (
+      {isLoading ? (
         <View style={styles.loaderContainer}>
           <ActivityIndicator size="large" color={Colors.primary} />
           <Text style={styles.loaderText}>Memuat daftar panitia...</Text>
@@ -401,7 +388,7 @@ export default function PanitiaScreen() {
           renderItem={renderPanitia}
           contentContainerStyle={styles.listContent}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />
+            <RefreshControl refreshing={isRefetching} onRefresh={onRefresh} colors={[Colors.primary]} />
           }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>

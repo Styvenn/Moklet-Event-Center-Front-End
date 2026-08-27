@@ -1,5 +1,5 @@
 // app/room-tim.tsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -17,25 +17,23 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Colors, Spacing, Radius } from '../constants/theme';
+import { cacheTime, queryKeys } from '../constants/query';
 import { useAuth } from '../context/AuthContext';
 import {
   getTeamById,
   lockTeam,
   leaveTeam,
   TeamDetailItem,
-  TeamMemberItem,
 } from '../services/registration.service';
 
 export default function RoomTimScreen() {
   const { teamId } = useLocalSearchParams<{ teamId?: string }>();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
 
-  const [team, setTeam] = useState<TeamDetailItem | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   // Transfer Leader Modal State
@@ -44,32 +42,28 @@ export default function RoomTimScreen() {
 
   const currentStudentId = user?.student?.id || '';
 
-  const loadTeamData = useCallback(async (isRefresh = false) => {
-    if (!teamId) {
-      setErrorMsg('ID Tim tidak ditemukan.');
-      setLoading(false);
-      return;
-    }
+  const { data: team, isLoading, isRefetching, error, refetch } = useQuery<TeamDetailItem>({
+    queryKey: queryKeys.team(teamId),
+    enabled: !!teamId,
+    staleTime: cacheTime.hot,
+    queryFn: () => getTeamById(teamId!),
+  });
 
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
-    setErrorMsg(null);
+  const errorMsg = !teamId
+    ? 'ID Tim tidak ditemukan.'
+    : error
+      ? (error as any)?.formattedMessage || 'Gagal memuat data room tim.'
+      : null;
 
-    try {
-      const data = await getTeamById(teamId);
-      setTeam(data);
-    } catch (err: any) {
-      console.warn('Error loading team data:', err);
-      setErrorMsg(err?.formattedMessage || 'Gagal memuat data room tim.');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [teamId]);
-
-  useEffect(() => {
-    loadTeamData();
-  }, [loadTeamData]);
+  // Sinkronkan semua cache yang bergantung pada data tim.
+  const invalidateTeamData = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.team(teamId) }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.registrationHistory }),
+      queryClient.invalidateQueries({ queryKey: ['home'] }),
+      queryClient.invalidateQueries({ queryKey: ['events'] }),
+    ]);
+  };
 
   const isLeader = Boolean(
     team && currentStudentId && (team.leaderStudentId === currentStudentId || team.members.some(m => m.studentId === currentStudentId && m.isLeader))
@@ -111,8 +105,8 @@ export default function RoomTimScreen() {
             setActionLoading(true);
             try {
               await lockTeam(team.id);
+              await invalidateTeamData();
               Alert.alert('Sukses', 'Tim berhasil dikunci!');
-              loadTeamData(true);
             } catch (err: any) {
               Alert.alert('Gagal Mengunci Tim', err?.formattedMessage || 'Terjadi kesalahan.');
             } finally {
@@ -153,6 +147,7 @@ export default function RoomTimScreen() {
             setActionLoading(true);
             try {
               await leaveTeam(team.id);
+              await invalidateTeamData();
               Alert.alert('Berhasil', 'Kamu telah keluar dari tim.');
               router.replace('/(tabs)/history');
             } catch (err: any) {
@@ -182,7 +177,7 @@ export default function RoomTimScreen() {
     }
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
@@ -214,7 +209,7 @@ export default function RoomTimScreen() {
           <Ionicons name="alert-circle-outline" size={48} color={Colors.error} />
           <Text style={styles.errorTitle}>Terjadi Kesalahan</Text>
           <Text style={styles.errorSub}>{errorMsg || 'Data tim tidak ditemukan.'}</Text>
-          <TouchableOpacity style={styles.retryBtn} onPress={() => loadTeamData()}>
+          <TouchableOpacity style={styles.retryBtn} onPress={() => refetch()}>
             <Text style={styles.retryBtnText}>Coba Lagi</Text>
           </TouchableOpacity>
         </View>
@@ -251,8 +246,8 @@ export default function RoomTimScreen() {
         contentContainerStyle={styles.content}
         refreshControl={
           <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => loadTeamData(true)}
+            refreshing={isRefetching}
+            onRefresh={refetch}
             colors={[Colors.primary]}
           />
         }

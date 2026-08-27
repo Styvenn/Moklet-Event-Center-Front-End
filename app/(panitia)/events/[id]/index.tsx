@@ -1,5 +1,5 @@
 // app/(panitia)/events/[id]/index.tsx
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useRef } from "react";
 import {
   Animated,
   PanResponder,
@@ -20,8 +20,10 @@ import {
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from "@expo/vector-icons";
-import { useLocalSearchParams, router, useFocusEffect } from "expo-router";
+import { useLocalSearchParams, router } from "expo-router";
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Colors, Spacing, Radius } from "../../../../constants/theme";
+import { cacheTime, queryKeys } from '../../../../constants/query';
 import {
   getEventById,
   getCategoriesByEvent,
@@ -120,65 +122,78 @@ function SwipeableBottomModal({
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const eventId = Array.isArray(id) ? id[0] : id;
+  const queryClient = useQueryClient();
 
   const [activeTab, setActiveTab] = useState<ActiveTab>("info");
-  const [event, setEvent] = useState<EventItem | null>(null);
-  const [categories, setCategories] = useState<CategoryItem[]>([]);
-  const [schedules, setSchedules] = useState<ScheduleItem[]>([]);
-  const [committee, setCommittee] = useState<CommitteeMemberItem[]>([]);
-
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState("");
 
   // Modal Tambah Panitia state
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [students, setStudents] = useState<StudentItem[]>([]);
   const [searchingStudents, setSearchingStudents] = useState(false);
-  const [addedStudentIds, setAddedStudentIds] = useState<Set<string>>(new Set());
   const [addingId, setAddingId] = useState<string | null>(null);
 
-  const fetchAllData = useCallback(async () => {
-    if (!eventId) return;
-    setError("");
-
-    try {
+  const {
+    data,
+    isLoading,
+    isRefetching,
+    error: queryError,
+    refetch,
+  } = useQuery<{
+    event: EventItem | null;
+    categories: CategoryItem[];
+    schedules: ScheduleItem[];
+    committee: CommitteeMemberItem[];
+  }>({
+    queryKey: queryKeys.panitiaEventDetail(eventId),
+    enabled: !!eventId,
+    staleTime: cacheTime.reactive,
+    queryFn: async () => {
       const [evRes, catRes, schRes, comRes] = await Promise.allSettled([
-        getEventById(eventId),
-        getCategoriesByEvent(eventId),
-        getSchedulesByEvent(eventId),
-        getCommittee(eventId),
+        getEventById(eventId!),
+        getCategoriesByEvent(eventId!),
+        getSchedulesByEvent(eventId!),
+        getCommittee(eventId!),
       ]);
 
-      if (evRes.status === "fulfilled") setEvent(evRes.value);
-      else setError("Gagal memuat detail event.");
+      return {
+        event: evRes.status === 'fulfilled' ? evRes.value : null,
+        categories:
+          catRes.status === 'fulfilled' ? catRes.value : [],
+        schedules:
+          schRes.status === 'fulfilled' ? schRes.value : [],
+        committee:
+          comRes.status === 'fulfilled' ? comRes.value : [],
+      };
+    },
+  });
 
-      if (catRes.status === "fulfilled") setCategories(catRes.value);
-      if (schRes.status === "fulfilled") setSchedules(schRes.value);
-      if (comRes.status === "fulfilled") {
-        setCommittee(comRes.value);
-        const existingIds = new Set(comRes.value.map((c) => c.studentId));
-        setAddedStudentIds(existingIds);
-      }
-    } catch {
-      setError("Gagal memuat data event.");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [eventId]);
+  const event = data?.event || null;
+  const categories = data?.categories || [];
+  const schedules = data?.schedules || [];
+  const committee = data?.committee || [];
+  const addedStudentIds = new Set(committee.map((c) => c.studentId));
 
-  useFocusEffect(
-    useCallback(() => {
-      setLoading(true);
-      fetchAllData();
-    }, [fetchAllData])
-  );
+  const loading = isLoading;
+  const error = eventId
+    ? queryError
+      ? "Gagal memuat data event."
+      : data && !event
+        ? "Gagal memuat detail event."
+        : ""
+    : "";
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchAllData();
+  // Sinkronkan semua data turunan event ini di seluruh layar.
+  const invalidateEventDetailData = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.panitiaEventDetail(eventId) }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.managedEvents }),
+      queryClient.invalidateQueries({ queryKey: ['events'] }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.eventDetail(eventId) }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.eventCategories(eventId) }),
+      queryClient.invalidateQueries({ queryKey: ['home'] }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.registrationHistory }),
+    ]);
   };
 
   // Search students for Add Member Modal
@@ -209,9 +224,7 @@ export default function EventDetailScreen() {
     setAddingId(studentId);
     try {
       await addCommitteeMember(eventId, studentId);
-      setAddedStudentIds((prev) => new Set(prev).add(studentId));
-      const updatedCom = await getCommittee(eventId);
-      setCommittee(updatedCom);
+      await invalidateEventDetailData();
       Alert.alert("Berhasil", "Anggota komite berhasil ditambahkan.");
     } catch (e: any) {
       Alert.alert("Gagal", e?.formattedMessage || "Gagal menambahkan panitia.");
@@ -230,12 +243,7 @@ export default function EventDetailScreen() {
           if (!eventId) return;
           try {
             await removeCommitteeMember(eventId, studentId);
-            setCommittee((prev) => prev.filter((c) => c.studentId !== studentId));
-            setAddedStudentIds((prev) => {
-              const next = new Set(prev);
-              next.delete(studentId);
-              return next;
-            });
+            await invalidateEventDetailData();
             Alert.alert("Sukses", "Anggota berhasil dikeluarkan.");
           } catch {
             Alert.alert("Error", "Gagal mengeluarkan panitia.");
@@ -254,7 +262,7 @@ export default function EventDetailScreen() {
         onPress: async () => {
           try {
             await deleteCategory(catId);
-            setCategories((prev) => prev.filter((c) => c.id !== catId));
+            await invalidateEventDetailData();
             Alert.alert("Sukses", "Cabang lomba berhasil dihapus.");
           } catch {
             Alert.alert("Error", "Gagal menghapus cabang lomba.");
@@ -296,7 +304,7 @@ export default function EventDetailScreen() {
         onPress: async () => {
           try {
             await deleteSchedule(schId);
-            setSchedules((prev) => prev.filter((s) => s.id !== schId));
+            await invalidateEventDetailData();
           } catch {
             Alert.alert("Error", "Gagal menghapus jadwal.");
           }
@@ -333,8 +341,8 @@ export default function EventDetailScreen() {
           <Ionicons name="alert-circle-outline" size={48} color={Colors.primary} />
           <Text style={styles.errorTitle}>Detail Event Tidak Ditemukan</Text>
           <Text style={styles.errorSub}>{error || "Event tidak ada atau telah dihapus."}</Text>
-          <TouchableOpacity style={styles.retryBtn} onPress={() => router.back()}>
-            <Text style={styles.retryText}>Kembali</Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={() => refetch()}>
+            <Text style={styles.retryText}>Coba Lagi</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -348,8 +356,8 @@ export default function EventDetailScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
+            refreshing={isRefetching}
+            onRefresh={refetch}
             colors={[Colors.primary]}
           />
         }

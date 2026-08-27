@@ -1,5 +1,5 @@
 // app/(admin)/dashboard.tsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -16,7 +16,9 @@ import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
 import { Colors, Spacing, Radius } from '../../constants/theme';
+import { cacheTime, queryKeys } from '../../constants/query';
 import { useAuth } from '../../context/AuthContext';
 import { getStudents } from '../../services/admin/students.service';
 import { getPanitia } from '../../services/admin/panitia.service';
@@ -33,23 +35,19 @@ export default function AdminDashboardScreen() {
   const adminName = user?.student?.name || user?.email?.split('@')[0] || 'Admin';
   const avatarUrl = user?.student?.avatarUrl;
 
-  const [stats, setStats] = useState<DashboardStats>({
-    totalSiswa: null,
-    panitiaAktif: null,
-    eventBerjalan: null,
-  });
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
-  const fetchStats = useCallback(async () => {
-    try {
+  // Warm cache: ringkasan stats tampil instan saat admin bolak-balik halaman.
+  const { data: stats, isLoading, isRefetching, refetch } = useQuery<DashboardStats>({
+    queryKey: queryKeys.adminStats,
+    staleTime: cacheTime.warm,
+    queryFn: async () => {
       // Total Siswa: gunakan limit=100 agar meta.total akurat
       // (limit=1 bisa sebabkan backend return total=1 jika tidak ada proper pagination meta)
       const studentsRes = await getStudents(1, 100);
       const totalSiswa = studentsRes.meta.total;
 
-      // Panitia Aktif: fetch semua panitia, hitung yang isActive === true
+      // Panitia Aktif: hitung yang isActive === true.
       // Jika endpoint belum siap (404), panitiaAktif tetap null → tampilkan "—"
       let panitiaAktif: number | null = null;
       try {
@@ -60,10 +58,9 @@ export default function AdminDashboardScreen() {
         if (status !== 404) {
           console.warn('Error fetching panitia stats:', e);
         }
-        // Tetap null — ditampilkan sebagai "—" di UI
       }
 
-      // Event Berjalan: fetch semua event, hitung yang ONGOING
+      // Event Berjalan: hitung yang ONGOING
       let eventBerjalan = 0;
       try {
         const evRes: any = await api.get('/events?limit=100');
@@ -71,25 +68,13 @@ export default function AdminDashboardScreen() {
         eventBerjalan = evList.filter((e: any) => e.status === 'ONGOING').length;
       } catch { /* ignore event fetch error */ }
 
-      setStats({
+      return {
         totalSiswa,
         panitiaAktif,
         eventBerjalan,
-      });
-    } catch (err) {
-      console.warn('Error fetching admin dashboard stats:', err);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
-
-  useEffect(() => { fetchStats(); }, [fetchStats]);
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchStats();
-  };
+      };
+    },
+  });
 
   const handleLogout = async () => {
     setShowLogoutModal(false);
@@ -130,7 +115,7 @@ export default function AdminDashboardScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />
+          <RefreshControl refreshing={isRefetching} onRefresh={refetch} colors={[Colors.primary]} />
         }
       >
         {/* Page Title */}
@@ -139,7 +124,7 @@ export default function AdminDashboardScreen() {
           <Text style={styles.pageSubtitle}>Ringkasan data operasional hari ini.</Text>
         </View>
 
-        {loading ? (
+        {isLoading ? (
           <View style={styles.loaderContainer}>
             <ActivityIndicator size="large" color={Colors.primary} />
           </View>
@@ -150,7 +135,7 @@ export default function AdminDashboardScreen() {
               <View>
                 <Text style={styles.statLabel}>Total Siswa</Text>
                 <Text style={styles.statValueLarge}>
-                  {stats.totalSiswa !== null
+                  {stats?.totalSiswa != null
                     ? stats.totalSiswa.toLocaleString('id-ID')
                     : '—'}
                 </Text>
@@ -169,7 +154,7 @@ export default function AdminDashboardScreen() {
                 </View>
                 <Text style={styles.statLabelSmall}>Panitia Aktif</Text>
                 <Text style={styles.statValueMid}>
-                  {stats.panitiaAktif !== null && stats.panitiaAktif !== undefined ? stats.panitiaAktif : '—'}
+                  {stats?.panitiaAktif != null ? stats.panitiaAktif : '—'}
                 </Text>
               </View>
 
@@ -180,7 +165,7 @@ export default function AdminDashboardScreen() {
                 </View>
                 <Text style={styles.statLabelSmall}>Event Berjalan</Text>
                 <Text style={styles.statValueMid}>
-                  {stats.eventBerjalan !== null ? stats.eventBerjalan : '—'}
+                  {stats?.eventBerjalan != null ? stats.eventBerjalan : '—'}
                 </Text>
               </View>
             </View>

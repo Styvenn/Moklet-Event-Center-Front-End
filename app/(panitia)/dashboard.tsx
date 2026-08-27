@@ -1,5 +1,5 @@
 // app/(panitia)/dashboard.tsx
-import React, { useState, useCallback } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -16,8 +16,10 @@ import {
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from "@expo/vector-icons";
-import { router, useFocusEffect } from "expo-router";
+import { router } from "expo-router";
+import { useQuery } from '@tanstack/react-query';
 import { Colors, Spacing, Radius } from "../../constants/theme";
+import { cacheTime, queryKeys } from '../../constants/query';
 import { useAuth } from "../../context/AuthContext";
 import { getEvents, EventItem } from "../../services/panitia/events.service";
 import { getPanitia } from "../../services/admin/panitia.service";
@@ -28,47 +30,29 @@ export default function PanitiaDashboardScreen() {
     user?.student?.name || user?.email?.split("@")[0] || "Panitia";
   const avatarUrl = user?.student?.avatarUrl;
 
-  const [events, setEvents] = useState<EventItem[]>([]);
-  const [panitiaCount, setPanitiaCount] = useState<number>(0);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState("");
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
-  const loadData = useCallback(async () => {
-    setError("");
-    try {
+  const { data, isLoading, isRefetching, error, refetch } = useQuery({
+    queryKey: queryKeys.panitiaDashboard,
+    staleTime: cacheTime.warm,
+    queryFn: async () => {
       const [eventsRes, panitiaRes] = await Promise.allSettled([
         getEvents(1, 100),
         getPanitia(),
       ]);
 
-      if (eventsRes.status === "fulfilled") {
-        setEvents(eventsRes.value);
-      }
-      if (panitiaRes.status === "fulfilled") {
-        const activeList = panitiaRes.value.filter((p) => p.isActive);
-        setPanitiaCount(activeList.length || panitiaRes.value.length);
-      }
-    } catch {
-      setError("Gagal memuat data operasional.");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+      const events = eventsRes.status === 'fulfilled' ? eventsRes.value : [];
+      const panitiaList = panitiaRes.status === 'fulfilled' ? panitiaRes.value : [];
+      const panitiaCount =
+        panitiaList.filter((p) => p.isActive).length || panitiaList.length;
 
-  useFocusEffect(
-    useCallback(() => {
-      setLoading(true);
-      loadData();
-    }, [loadData])
-  );
+      return { events, panitiaCount };
+    },
+  });
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    loadData();
-  };
+  const events = data?.events || [];
+  const panitiaCount = data?.panitiaCount || 0;
+  const loadError = error ? 'Gagal memuat data operasional.' : '';
 
   const handleLogout = async () => {
     setShowLogoutModal(false);
@@ -112,8 +96,8 @@ export default function PanitiaDashboardScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
+            refreshing={isRefetching}
+            onRefresh={refetch}
             colors={[Colors.primary]}
           />
         }
@@ -126,18 +110,18 @@ export default function PanitiaDashboardScreen() {
           </Text>
         </View>
 
-        {loading ? (
+        {isLoading ? (
           <View style={styles.loaderBox}>
             <ActivityIndicator size="large" color={Colors.primary} />
           </View>
-        ) : error ? (
+        ) : loadError ? (
           <View style={styles.errorBox}>
             <Ionicons
               name="alert-circle-outline"
               size={20}
               color={Colors.primary}
             />
-            <Text style={styles.errorText}>{error}</Text>
+            <Text style={styles.errorText}>{loadError}</Text>
           </View>
         ) : (
           <>

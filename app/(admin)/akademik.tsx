@@ -1,5 +1,5 @@
 // app/(admin)/akademik.tsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -34,6 +34,8 @@ import {
 } from '../../services/admin/system-setting.service';
 import { useDragToClose } from '../../components/useDragToClose';
 import { getErrorMessage } from '../../services/api';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { cacheTime, queryKeys } from '../../constants/query';
 
 // ─── Helpers: Jurusan & Grade Colors ──────────────────────────────────────────
 
@@ -402,38 +404,40 @@ function ChangeAcademicYearModal({ visible, current, onClose, onSuccess }: Chang
 // ─── Main Screen ───────────────────────────────────────────────────────────────
 
 export default function AkademikScreen() {
-  const [classes, setClasses] = useState<ClassItem[]>([]);
+  const queryClient = useQueryClient();
   const [selectedGradeFilter, setSelectedGradeFilter] = useState<'ALL' | GradeOption>('ALL');
-  const [systemSetting, setSystemSetting] = useState<SystemSetting | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [showAddClassModal, setShowAddClassModal] = useState(false);
   const [showChangeYearModal, setShowChangeYearModal] = useState(false);
 
-  const fetchAll = useCallback(async () => {
-    try {
+  const {
+    data,
+    isLoading,
+    isRefetching,
+    refetch,
+  } = useQuery<{ classes: ClassItem[]; systemSetting: SystemSetting | null }>({
+    queryKey: queryKeys.adminAkademik,
+    staleTime: cacheTime.cold,
+    queryFn: async () => {
       const [classesRes, settingRes] = await Promise.all([
         getClasses(),
         getSystemSetting(),
       ]);
-      setClasses(classesRes);
-      setSystemSetting(settingRes);
-    } catch (e) {
-      console.warn('Akademik fetch error:', e);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+      return { classes: classesRes, systemSetting: settingRes };
+    },
+  });
 
-  useEffect(() => {
-    fetchAll();
-  }, [fetchAll]);
+  const classes = data?.classes || [];
+  const systemSetting = data?.systemSetting || null;
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchAll();
+  const invalidateAkademikData = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.adminAkademik }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.adminStudents }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.adminStats }),
+    ]);
   };
+
+  const onRefresh = () => refetch();
 
   const handleDeleteClass = (cls: ClassItem) => {
     const studentCount = cls._count?.students ?? cls.studentCount;
@@ -452,7 +456,7 @@ export default function AkademikScreen() {
           onPress: async () => {
             try {
               await deleteClass(cls.id);
-              setClasses((prev) => prev.filter((c) => c.id !== cls.id));
+              await invalidateAkademikData();
             } catch (e: any) {
               // Jika server menolak penghapusan permanen karena riwayat arsip database
               Alert.alert(
@@ -465,7 +469,7 @@ export default function AkademikScreen() {
                     style: 'destructive',
                     onPress: async () => {
                       await hideClass(cls.id);
-                      setClasses((prev) => prev.filter((c) => c.id !== cls.id));
+                      await invalidateAkademikData();
                     },
                   },
                 ]
@@ -539,7 +543,7 @@ export default function AkademikScreen() {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />
+          <RefreshControl refreshing={isRefetching} onRefresh={onRefresh} colors={[Colors.primary]} />
         }
       >
         {/* System Setting Card */}
@@ -618,7 +622,7 @@ export default function AkademikScreen() {
           ))}
         </View>
 
-        {loading ? (
+        {isLoading ? (
           <View style={styles.loaderBox}>
             <ActivityIndicator size="large" color={Colors.primary} />
             <Text style={styles.loaderText}>Memuat data kelas...</Text>
@@ -646,7 +650,7 @@ export default function AkademikScreen() {
         onClose={() => setShowAddClassModal(false)}
         onSuccess={() => {
           setShowAddClassModal(false);
-          fetchAll();
+          invalidateAkademikData();
         }}
       />
 
@@ -655,9 +659,9 @@ export default function AkademikScreen() {
         current={systemSetting || undefined}
         onClose={() => setShowChangeYearModal(false)}
         onSuccess={(updated) => {
-          setSystemSetting(updated);
+          void updated;
+          invalidateAkademikData();
           setShowChangeYearModal(false);
-          fetchAll();
         }}
       />
     </SafeAreaView>

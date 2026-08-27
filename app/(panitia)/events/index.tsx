@@ -1,5 +1,5 @@
 // app/(panitia)/events/index.tsx
-import React, { useState, useCallback } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -14,43 +14,24 @@ import {
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from "@expo/vector-icons";
-import { router, useFocusEffect } from "expo-router";
+import { router } from "expo-router";
+import { useQuery } from '@tanstack/react-query';
 import { Colors, Spacing, Radius } from "../../../constants/theme";
+import { cacheTime, queryKeys } from '../../../constants/query';
 import { getEvents, EventItem } from "../../../services/panitia/events.service";
 import { formatDate } from "../../../utils/date";
 
 export default function EventsListScreen() {
-  const [events, setEvents] = useState<EventItem[]>([]);
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState("");
 
-  const load = useCallback(async () => {
-    setError("");
-    try {
-      const data = await getEvents(1, 50);
-      setEvents(data);
-    } catch {
-      setError("Gagal memuat event. Tarik untuk mencoba ulang.");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+  // Warm cache: daftar event yang dikelola tampil instan saat layar dibuka ulang.
+  const { data: events = [], isLoading, isRefetching, error, refetch } = useQuery<EventItem[]>({
+    queryKey: queryKeys.managedEvents,
+    staleTime: cacheTime.warm,
+    queryFn: () => getEvents(1, 50),
+  });
 
-  useFocusEffect(
-    useCallback(() => {
-      setLoading(true);
-      setSearch("");
-      load();
-    }, [load])
-  );
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    load();
-  };
+  const loadError = error ? 'Gagal memuat event. Tarik untuk mencoba ulang.' : '';
 
   const filteredEvents = events.filter((ev) =>
     ev.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -155,16 +136,16 @@ export default function EventsListScreen() {
         </View>
       </View>
 
-      {loading ? (
+      {isLoading ? (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={Colors.primary} />
         </View>
-      ) : error ? (
+      ) : loadError ? (
         <View style={styles.centered}>
           <Ionicons name="alert-circle-outline" size={48} color="#BDBDBD" />
           <Text style={styles.errorTitle}>Gagal Memuat</Text>
-          <Text style={styles.errorSub}>{error}</Text>
-          <TouchableOpacity style={styles.retryBtn} onPress={() => { setLoading(true); load(); }}>
+          <Text style={styles.errorSub}>{loadError}</Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={() => refetch()}>
             <Text style={styles.retryText}>Coba Lagi</Text>
           </TouchableOpacity>
         </View>
@@ -176,8 +157,8 @@ export default function EventsListScreen() {
           contentContainerStyle={styles.list}
           refreshControl={
             <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
+              refreshing={isRefetching}
+              onRefresh={refetch}
               colors={[Colors.primary]}
             />
           }
