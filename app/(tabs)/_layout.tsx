@@ -7,8 +7,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/theme';
 
 /**
- * Custom Bottom Navigation Bar matching the exact design:
- * - 4 tabs: Home, Events, Info, History
+ * Custom Bottom Navigation Bar:
+ * - 5 tabs: Home, Events, Info, History, Profil
  * - Active state: Solid red rounded button pill with white icon & white text inside
  * - Inactive state: Slate grey icon & text
  * - Floating/rounded top white container with subtle shadow
@@ -41,6 +41,12 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
       label: 'History',
       iconActive: 'time',
       iconInactive: 'time-outline',
+    },
+    {
+      name: 'profile',
+      label: 'Profil',
+      iconActive: 'person',
+      iconInactive: 'person-outline',
     },
   ];
 
@@ -79,12 +85,12 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
             >
               {isFocused ? (
                 <View style={styles.activePill}>
-                  <Ionicons name={item.iconActive as any} size={22} color="#FFFFFF" />
+                  <Ionicons name={item.iconActive as any} size={18} color="#FFFFFF" />
                   <Text style={styles.activeLabel}>{item.label}</Text>
                 </View>
               ) : (
                 <View style={styles.inactiveBox}>
-                  <Ionicons name={item.iconInactive as any} size={22} color="#8E9BAE" />
+                  <Ionicons name={item.iconInactive as any} size={20} color="#8E9BAE" />
                   <Text style={styles.inactiveLabel}>{item.label}</Text>
                 </View>
               )}
@@ -108,7 +114,7 @@ export default function TabLayout() {
       <Tabs.Screen name="events" options={{ title: 'Events' }} />
       <Tabs.Screen name="info" options={{ title: 'Info' }} />
       <Tabs.Screen name="history" options={{ title: 'History' }} />
-      <Tabs.Screen name="profile" options={{ href: null }} />
+      <Tabs.Screen name="profile" options={{ title: 'Profil' }} />
     </Tabs>
   );
 }
@@ -142,15 +148,15 @@ const styles = StyleSheet.create({
   activePill: {
     backgroundColor: '#B81414',
     borderRadius: 14,
-    paddingVertical: 7,
-    paddingHorizontal: 16,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 70,
+    minWidth: 56,
   },
   activeLabel: {
     color: '#FFFFFF',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
     marginTop: 2,
   },
