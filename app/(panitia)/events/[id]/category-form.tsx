@@ -29,7 +29,7 @@ export default function CategoryFormScreen() {
 
   const [fetching, setFetching] = useState(isEdit);
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState<{ name?: string; members?: string; general?: string }>({});
+  const [errors, setErrors] = useState<{ name?: string; members?: string; maxTeamsPerGroup?: string; general?: string }>({});
 
   useEffect(() => {
     async function load() {
@@ -56,14 +56,38 @@ export default function CategoryFormScreen() {
     load();
   }, [targetEventId, targetCatId]);
 
+  // Auto-switch ke individu jika user pilih tim tapi maxMember = 1
+  useEffect(() => {
+    if (isTeam) {
+      const maxNum = parseInt(maxMember, 10);
+      if (!isNaN(maxNum) && maxNum <= 1) {
+        setIsTeam(false);
+        setMinMember("1");
+        setMaxMember("1");
+      }
+    }
+  }, [maxMember, isTeam]);
+
   const validate = () => {
     const errs: typeof errors = {};
     if (!name.trim()) errs.name = "Nama lomba wajib diisi.";
-    const minNum = parseInt(minMember, 10);
-    const maxNum = parseInt(maxMember, 10);
-    if (isNaN(minNum) || isNaN(maxNum) || minNum < 1 || maxNum < minNum) {
-      errs.members = "Jumlah anggota minimal & maksimal tidak valid.";
+
+    if (isTeam) {
+      const minNum = parseInt(minMember, 10);
+      const maxNum = parseInt(maxMember, 10);
+      if (isNaN(minNum) || isNaN(maxNum) || minNum < 1 || maxNum < minNum) {
+        errs.members = "Jumlah anggota minimal & maksimal tidak valid.";
+      }
+      if (maxNum <= 1) {
+        errs.members = "Jumlah anggota maksimal harus lebih dari 1 untuk mode Tim.";
+      }
     }
+
+    // Validasi maxTeamsPerGroup HANYA untuk mode PER_CLASS dan PER_ANGKATAN
+    if ((teamCompositionMode === "PER_CLASS" || teamCompositionMode === "PER_ANGKATAN") && !maxTeamsPerGroup.trim()) {
+      errs.maxTeamsPerGroup = `Maksimal Tim per ${teamCompositionMode === "PER_CLASS" ? "Kelas" : "Angkatan"} wajib diisi untuk mode ini.`;
+    }
+
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -73,15 +97,21 @@ export default function CategoryFormScreen() {
     setLoading(true);
     setErrors({});
 
-    const minNum = parseInt(minMember, 10);
+    // Tentukan final mode berdasarkan maxMember
     const maxNum = isTeam ? parseInt(maxMember, 10) : 1;
+    const minNum = isTeam ? parseInt(minMember, 10) : 1;
+    const finalIsTeam = isTeam && maxNum > 1;
 
     const dto = {
       name: name.trim(),
-      minMember: isTeam ? minNum : 1,
-      maxMember: maxNum,
+      minMember: finalIsTeam ? minNum : 1,
+      maxMember: finalIsTeam ? maxNum : 1,
       teamCompositionMode,
-      maxTeamsPerGroup: maxTeamsPerGroup.trim() ? parseInt(maxTeamsPerGroup, 10) : undefined,
+      // Hanya kirim maxTeamsPerGroup jika mode membutuhkannya
+      maxTeamsPerGroup:
+        (teamCompositionMode === "PER_CLASS" || teamCompositionMode === "PER_ANGKATAN") && maxTeamsPerGroup.trim()
+          ? parseInt(maxTeamsPerGroup, 10)
+          : undefined,
       maxTotalTeams: maxTotalTeams.trim() ? parseInt(maxTotalTeams, 10) : undefined,
       excludeGrade12,
     };
@@ -94,7 +124,11 @@ export default function CategoryFormScreen() {
       }
       setLoading(false);
       Alert.alert("Sukses", `Cabang lomba berhasil ${isEdit ? "diperbarui" : "ditambahkan"}!`, [
-        { text: "OK", onPress: () => router.back() }
+        {
+          text: "OK",
+          // Gunakan router.replace agar tidak stack-up halaman
+          onPress: () => router.replace({ pathname: "/(panitia)/events/[id]", params: { id: targetEventId } } as any),
+        },
       ]);
     } catch (e: any) {
       setLoading(false);
@@ -118,7 +152,10 @@ export default function CategoryFormScreen() {
         style={{ flex: 1 }}
       >
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <TouchableOpacity
+            onPress={() => router.replace({ pathname: "/(panitia)/events/[id]", params: { id: targetEventId } } as any)}
+            style={styles.backBtn}
+          >
             <Ionicons name="arrow-back" size={24} color="#1E1E1E" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{isEdit ? "Edit Lomba" : "Tambah Lomba Baru"}</Text>
@@ -160,7 +197,7 @@ export default function CategoryFormScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.toggleBtn, isTeam ? styles.toggleActive : null]}
-              onPress={() => { setIsTeam(true); if (maxMember === "1") setMaxMember("5"); }}
+              onPress={() => { setIsTeam(true); if (parseInt(maxMember, 10) <= 1) setMaxMember("5"); if (parseInt(minMember, 10) <= 1) setMinMember("2"); }}
             >
               <Ionicons name="people-outline" size={18} color={isTeam ? "#fff" : "#757575"} />
               <Text style={[styles.toggleText, isTeam ? styles.toggleTextActive : null]}>Kelompok / Tim</Text>
@@ -173,24 +210,34 @@ export default function CategoryFormScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.label}>Min Anggota/Tim</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, errors.members ? styles.inputError : null]}
                   keyboardType="numeric"
                   value={minMember}
-                  onChangeText={setMinMember}
+                  onChangeText={(t) => { setMinMember(t); setErrors((e) => ({ ...e, members: undefined })); }}
                 />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.label}>Max Anggota/Tim</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, errors.members ? styles.inputError : null]}
                   keyboardType="numeric"
                   value={maxMember}
-                  onChangeText={setMaxMember}
+                  onChangeText={(t) => { setMaxMember(t); setErrors((e) => ({ ...e, members: undefined })); }}
                 />
               </View>
             </View>
           )}
           {errors.members && <Text style={styles.errHint}>{errors.members}</Text>}
+
+          {/* Info otomatis switch ke individu */}
+          {isTeam && (
+            <View style={styles.infoBox}>
+              <Ionicons name="information-circle-outline" size={15} color="#2563EB" />
+              <Text style={styles.infoText}>
+                Jika Max Anggota diisi 1, lomba akan otomatis berubah menjadi mode Individu.
+              </Text>
+            </View>
+          )}
 
           {/* Mode Komposisi Tim */}
           <Text style={styles.label}>Mode Komposisi Tim</Text>
@@ -204,13 +251,35 @@ export default function CategoryFormScreen() {
                 <TouchableOpacity
                   key={mode}
                   style={[styles.modeBtn, isSel ? styles.modeActive : null]}
-                  onPress={() => setTeamCompositionMode(mode)}
+                  onPress={() => {
+                    setTeamCompositionMode(mode);
+                    // Clear maxTeamsPerGroup error kalau pindah ke FREE
+                    if (mode === "FREE") setErrors((e) => ({ ...e, maxTeamsPerGroup: undefined }));
+                  }}
                 >
                   <Text style={[styles.modeText, isSel ? styles.modeTextActive : null]}>{labels[mode]}</Text>
                 </TouchableOpacity>
               );
             })}
           </View>
+
+          {/* Max Teams Per Group — HANYA untuk PER_CLASS / PER_ANGKATAN */}
+          {(teamCompositionMode === "PER_CLASS" || teamCompositionMode === "PER_ANGKATAN") && (
+            <>
+              <Text style={styles.label}>
+                Maksimal Tim per {teamCompositionMode === "PER_CLASS" ? "Kelas" : "Angkatan"} *
+              </Text>
+              <TextInput
+                style={[styles.input, errors.maxTeamsPerGroup ? styles.inputError : null]}
+                placeholder="Contoh: 2"
+                placeholderTextColor="#9E9E9E"
+                keyboardType="numeric"
+                value={maxTeamsPerGroup}
+                onChangeText={(t) => { setMaxTeamsPerGroup(t); setErrors((e) => ({ ...e, maxTeamsPerGroup: undefined })); }}
+              />
+              {errors.maxTeamsPerGroup && <Text style={styles.errHint}>{errors.maxTeamsPerGroup}</Text>}
+            </>
+          )}
 
           {/* Kuota Total */}
           <Text style={styles.label}>Kuota Maksimal Total (Opsional)</Text>
@@ -264,6 +333,11 @@ const styles = StyleSheet.create({
   scroll: { padding: Spacing.base, paddingBottom: 40 },
   errorBox: { flexDirection: "row", gap: 8, backgroundColor: "#FFEBEE", borderRadius: Radius.lg, padding: Spacing.md, marginBottom: Spacing.base },
   errorText: { flex: 1, fontSize: 13, color: Colors.primary },
+  infoBox: {
+    flexDirection: "row", gap: 6, backgroundColor: "#EFF6FF", borderRadius: Radius.md,
+    padding: Spacing.sm, marginTop: 6, alignItems: "flex-start",
+  },
+  infoText: { flex: 1, fontSize: 12, color: "#2563EB", lineHeight: 17 },
   label: { fontSize: 13, fontWeight: "600", color: "#424242", marginTop: Spacing.md, marginBottom: 6 },
   input: {
     backgroundColor: "#F5F5F5", borderRadius: Radius.lg, paddingHorizontal: Spacing.md,

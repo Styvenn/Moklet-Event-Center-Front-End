@@ -54,6 +54,7 @@ export default function EventsListScreen() {
   useFocusEffect(
     useCallback(() => {
       setLoading(true);
+      setSearch("");
       load();
     }, [load])
   );
@@ -149,6 +150,14 @@ export default function EventsListScreen() {
             value={search}
             onChangeText={setSearch}
           />
+          {search.length > 0 && (
+            <TouchableOpacity
+              onPress={() => setSearch("")}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="close-circle" size={18} color="#9E9E9E" />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 

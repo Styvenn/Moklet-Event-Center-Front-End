@@ -1,6 +1,8 @@
 // app/(panitia)/events/[id]/index.tsx
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
+  Animated,
+  PanResponder,
   View,
   Text,
   StyleSheet,
@@ -97,6 +99,54 @@ function getCategoryIcon(name: string): { name: any; bg: string; color: string }
     return { name: "hardware-chip", bg: "#E0E7FF", color: "#4F46E5" };
   }
   return { name: "trophy", bg: "#FEF3C7", color: "#D97706" };
+}
+
+// ─── Swipeable Bottom Sheet Modal ────────────────────────────────────────────
+function SwipeableBottomModal({
+  visible,
+  onClose,
+  children,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  const translateY = useRef(new Animated.Value(0)).current;
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 5,
+      onPanResponderMove: (_, gs) => {
+        if (gs.dy > 0) translateY.setValue(gs.dy);
+      },
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dy > 80) {
+          Animated.timing(translateY, { toValue: 500, duration: 200, useNativeDriver: true }).start(() => {
+            translateY.setValue(0);
+            onClose();
+          });
+        } else {
+          Animated.spring(translateY, { toValue: 0, useNativeDriver: true }).start();
+        }
+      },
+    })
+  ).current;
+
+  if (!visible) return null;
+
+  return (
+    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+      {/* Backdrop */}
+      <TouchableOpacity style={ms.overlay} activeOpacity={1} onPress={onClose} />
+      <Animated.View style={[ms.sheet, { transform: [{ translateY }] }]}>
+        {/* Drag handle */}
+        <View {...panResponder.panHandlers} style={{ paddingTop: 8, paddingBottom: 4, alignItems: "center" }}>
+          <View style={ms.handle} />
+        </View>
+        {children}
+      </Animated.View>
+    </Modal>
+  );
 }
 
 export default function EventDetailScreen() {
@@ -456,7 +506,15 @@ export default function EventDetailScreen() {
                 {event.guidebookUrl ? (
                   <TouchableOpacity
                     style={styles.guidebookBtn}
-                    onPress={() => Linking.openURL(event.guidebookUrl!)}
+                    onPress={() => {
+                      Linking.openURL(event.guidebookUrl!).catch(() => {
+                        Alert.alert(
+                          "Tidak Bisa Membuka",
+                          "Gagal membuka guidebook. Pastikan ada aplikasi PDF viewer terinstall, atau coba lagi.",
+                          [{ text: "OK" }]
+                        );
+                      });
+                    }}
                     activeOpacity={0.85}
                   >
                     <Ionicons name="open-outline" size={16} color="#B81414" />
@@ -739,83 +797,81 @@ export default function EventDetailScreen() {
         </View>
       </ScrollView>
 
-      {/* Modal Tambah Anggota Panitia */}
-      <Modal
+      {/* Modal Tambah Anggota Panitia — dengan swipe-to-close */}
+      <SwipeableBottomModal
         visible={showAddMemberModal}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setShowAddMemberModal(false)}
+        onClose={() => setShowAddMemberModal(false)}
       >
-        <View style={ms.overlay}>
-          <View style={ms.sheet}>
-            <View style={ms.handle} />
-            <View style={ms.sheetHeader}>
-              <Text style={ms.sheetTitle}>Tambah Anggota Komite</Text>
-              <TouchableOpacity onPress={() => setShowAddMemberModal(false)}>
-                <Ionicons name="close" size={24} color="#757575" />
-              </TouchableOpacity>
-            </View>
+        <View style={ms.sheetHeader}>
+          <Text style={ms.sheetTitle}>Tambah Anggota Komite</Text>
+          <TouchableOpacity onPress={() => setShowAddMemberModal(false)}>
+            <Ionicons name="close" size={24} color="#757575" />
+          </TouchableOpacity>
+        </View>
 
-            <View style={ms.searchBox}>
-              <Ionicons name="search" size={18} color="#9E9E9E" />
-              <TextInput
-                style={ms.searchInput}
-                placeholder="Cari nama atau NIS siswa..."
-                placeholderTextColor="#9E9E9E"
-                value={searchQuery}
-                onChangeText={handleSearchStudents}
-              />
-            </View>
+        <View style={ms.searchBox}>
+          <Ionicons name="search" size={18} color="#9E9E9E" />
+          <TextInput
+            style={ms.searchInput}
+            placeholder="Cari nama atau NIS siswa..."
+            placeholderTextColor="#9E9E9E"
+            value={searchQuery}
+            onChangeText={handleSearchStudents}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => { setSearchQuery(""); setStudents([]); }}>
+              <Ionicons name="close-circle" size={18} color="#9E9E9E" />
+            </TouchableOpacity>
+          )}
+        </View>
 
-            {searchingStudents ? (
-              <View style={{ paddingVertical: 24, alignItems: "center" }}>
-                <ActivityIndicator color={Colors.primary} />
-              </View>
-            ) : (
-              <FlatList
-                data={students}
-                keyExtractor={(s) => s.id}
-                style={{ maxHeight: 300, marginTop: 8 }}
-                renderItem={({ item }) => {
-                  const isAdded = addedStudentIds.has(item.id);
-                  const isPending = addingId === item.id;
-                  const classLabel = item.class ? `${item.class.grade} ${item.class.name}` : "";
-                  return (
-                    <View style={ms.studentRow}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={ms.studentName}>{item.name}</Text>
-                        <Text style={ms.studentSub}>
-                          {classLabel ? `${classLabel} • ` : ""}NIS: {item.nis || "-"}
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        style={[ms.addMemberBtn, isAdded ? ms.addedBtn : null]}
-                        onPress={() => handleAddMember(item.id)}
-                        disabled={isAdded || isPending}
-                      >
-                        {isPending ? (
-                          <ActivityIndicator size="small" color="#fff" />
-                        ) : (
-                          <Text style={[ms.addMemberBtnText, isAdded ? ms.addedText : null]}>
-                            {isAdded ? "Ditambahkan" : "Tambahkan"}
-                          </Text>
-                        )}
-                      </TouchableOpacity>
-                    </View>
-                  );
-                }}
-                ListEmptyComponent={
-                  <View style={{ paddingVertical: 24, alignItems: "center" }}>
-                    <Text style={{ fontSize: 13, color: "#9E9E9E" }}>
-                      {searchQuery ? "Siswa tidak ditemukan." : "Ketik nama siswa untuk mencari."}
+        {searchingStudents ? (
+          <View style={{ paddingVertical: 24, alignItems: "center" }}>
+            <ActivityIndicator color={Colors.primary} />
+          </View>
+        ) : (
+          <FlatList
+            data={students}
+            keyExtractor={(s) => s.id}
+            style={{ maxHeight: 300, marginTop: 8 }}
+            renderItem={({ item }) => {
+              const isAdded = addedStudentIds.has(item.id);
+              const isPending = addingId === item.id;
+              const classLabel = item.class ? `${item.class.grade} ${item.class.name}` : "";
+              return (
+                <View style={ms.studentRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={ms.studentName}>{item.name}</Text>
+                    <Text style={ms.studentSub}>
+                      {classLabel ? `${classLabel} • ` : ""}NIS: {item.nis || "-"}
                     </Text>
                   </View>
-                }
-              />
-            )}
-          </View>
-        </View>
-      </Modal>
+                  <TouchableOpacity
+                    style={[ms.addMemberBtn, isAdded ? ms.addedBtn : null]}
+                    onPress={() => handleAddMember(item.id)}
+                    disabled={isAdded || isPending}
+                  >
+                    {isPending ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Text style={[ms.addMemberBtnText, isAdded ? ms.addedText : null]}>
+                        {isAdded ? "Ditambahkan" : "Tambahkan"}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              );
+            }}
+            ListEmptyComponent={
+              <View style={{ paddingVertical: 24, alignItems: "center" }}>
+                <Text style={{ fontSize: 13, color: "#9E9E9E" }}>
+                  {searchQuery ? "Siswa tidak ditemukan." : "Ketik nama siswa untuk mencari."}
+                </Text>
+              </View>
+            }
+          />
+        )}
+      </SwipeableBottomModal>
     </SafeAreaView>
   );
 }
@@ -1116,8 +1172,9 @@ const styles = StyleSheet.create({
 const ms = StyleSheet.create({
   overlay: {
     flex: 1,
+    // Overlay sekarang absolute fill agar backdrop dan sheet bisa overlap
     backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "flex-end",
+    ...StyleSheet.absoluteFillObject,
   },
   sheet: {
     backgroundColor: "#fff",
@@ -1125,6 +1182,10 @@ const ms = StyleSheet.create({
     borderTopRightRadius: 20,
     padding: Spacing.base,
     maxHeight: "80%",
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
   },
   handle: {
     width: 40,
