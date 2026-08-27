@@ -4,9 +4,9 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   Platform,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   FlatList,
   TextInput,
   ActivityIndicator,
@@ -16,6 +16,7 @@ import {
   Alert,
   Animated,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius } from '../../constants/theme';
@@ -27,7 +28,7 @@ import {
   PanitiaItem,
 } from '../../services/admin/panitia.service';
 import { getErrorMessage } from '../../services/api';
-import { useDragToClose } from '../../hooks/useDragToClose';
+import { useDragToClose } from '../../components/useDragToClose';
 
 // ─── Avatar Color Helper ───────────────────────────────────────────────────────
 
@@ -75,15 +76,15 @@ function CreatePanitiaModal({ visible, onClose, onSuccess }: CreatePanitiaModalP
   const handleSubmit = async () => {
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
-      setError('Email wajib diisi.');
+      setError('Email panitia wajib diisi.');
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
-      setError('Format email tidak valid.');
+      setError('Format email tidak valid (contoh: panitia@moklet.sch.id).');
       return;
     }
     if (!password.trim() || password.length < 8) {
-      setError('Password minimal 8 karakter (persyaratan server).');
+      setError('Password minimal harus 8 karakter.');
       return;
     }
 
@@ -113,7 +114,9 @@ function CreatePanitiaModal({ visible, onClose, onSuccess }: CreatePanitiaModalP
       statusBarTranslucent
       onRequestClose={handleClose}
     >
-      <Animated.View style={[ms.overlay, { opacity: overlayOpacity }]} />
+      <TouchableWithoutFeedback onPress={handleClose}>
+        <Animated.View style={[ms.overlay, { opacity: overlayOpacity }]} />
+      </TouchableWithoutFeedback>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={ms.sheetContainer}

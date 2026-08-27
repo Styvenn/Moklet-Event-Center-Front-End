@@ -63,28 +63,27 @@ function PanitiaTabBar({ state, navigation }: any) {
               if (!isFocused && !event.defaultPrevented) {
                 navigation.navigate(route.name);
               }
-            } else {
-              navigation.navigate(item.name);
             }
           };
 
           return (
             <TouchableOpacity
               key={item.name}
-              accessibilityRole="button"
-              accessibilityState={isFocused ? { selected: true } : {}}
+              style={[
+                styles.tabItem,
+                isFocused ? styles.tabItemActive : styles.tabItemInactive,
+              ]}
               onPress={onPress}
-              activeOpacity={0.85}
-              style={styles.tabButton}
+              activeOpacity={0.7}
             >
               {isFocused ? (
                 <View style={styles.activePill}>
-                  <Ionicons name={item.iconActive} size={22} color="#FFFFFF" />
-                  <Text style={styles.activeLabel}>{item.label}</Text>
+                  <Ionicons name={item.iconActive} size={18} color="#FFFFFF" />
+                  <Text style={styles.activePillText}>{item.label}</Text>
                 </View>
               ) : (
-                <View style={styles.inactiveBox}>
-                  <Ionicons name={item.iconInactive} size={22} color="#8E9BAE" />
+                <View style={styles.inactiveIconWrapper}>
+                  <Ionicons name={item.iconInactive} size={22} color="#78909C" />
                   <Text style={styles.inactiveLabel}>{item.label}</Text>
                 </View>
               )}
@@ -120,46 +119,48 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.08,
     shadowRadius: 10,
-    elevation: 12,
+    elevation: 8,
     borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
+    borderTopColor: "#F0F0F0",
   },
   tabBarContent: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-around",
   },
-  tabButton: {
+  tabItem: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 2,
+    paddingVertical: 6,
+  },
+  tabItemActive: {
+    flex: 1.4,
+  },
+  tabItemInactive: {
+    flex: 1,
   },
   activePill: {
-    backgroundColor: "#B81414",
-    borderRadius: 14,
-    paddingVertical: 7,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.primary,
     paddingHorizontal: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    minWidth: 70,
+    paddingVertical: 8,
+    borderRadius: 24,
+    gap: 6,
   },
-  activeLabel: {
+  activePillText: {
     color: "#FFFFFF",
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: "700",
-    marginTop: 2,
   },
-  inactiveBox: {
-    paddingVertical: 7,
-    paddingHorizontal: 12,
+  inactiveIconWrapper: {
     alignItems: "center",
-    justifyContent: "center",
+    gap: 2,
   },
   inactiveLabel: {
-    color: "#8E9BAE",
-    fontSize: 11,
-    fontWeight: "500",
-    marginTop: 2,
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#78909C",
   },
 });

@@ -1,9 +1,18 @@
 // app/(panitia)/events/[id]/schedule-form.tsx
 import React, { useState, useEffect } from "react";
 import {
-  View, Text, StyleSheet, SafeAreaView, Platform, ScrollView,
-  TextInput, TouchableOpacity, ActivityIndicator, Alert, KeyboardAvoidingView,
-} from "react-native";
+  View,
+  Text,
+  StyleSheet,
+  Platform,
+  ScrollView,
+  TextInput,
+  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, router } from "expo-router";
 import { Colors, Spacing, Radius } from "../../../../constants/theme";

@@ -1,9 +1,19 @@
 // app/(panitia)/events/[id]/edit.tsx
 import React, { useState, useEffect } from "react";
 import {
-  View, Text, StyleSheet, SafeAreaView, Platform, ScrollView,
-  TextInput, TouchableOpacity, ActivityIndicator, Image, Alert, KeyboardAvoidingView,
-} from "react-native";
+  View,
+  Text,
+  StyleSheet,
+  Platform,
+  ScrollView,
+  TextInput,
+  TouchableOpacity,
+  ActivityIndicator,
+  Image,
+  Alert,
+  KeyboardAvoidingView,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, router } from "expo-router";
 import * as ImagePicker from "expo-image-picker";

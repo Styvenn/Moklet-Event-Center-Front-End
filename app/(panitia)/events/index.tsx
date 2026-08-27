@@ -4,15 +4,15 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   Platform,
   FlatList,
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
   TextInput,
-} from "react-native";
-import { Image } from "expo-image";
+} from 'react-native';
+import { Image } from 'expo-image';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import { Colors, Spacing, Radius } from "../../../constants/theme";

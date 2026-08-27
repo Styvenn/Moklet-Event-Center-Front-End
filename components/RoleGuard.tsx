@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, ActivityIndicator } from 'react-native';
-import { router } from 'expo-router';
+import { Redirect } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
 import { Colors } from '../constants/theme';
 
@@ -21,8 +21,7 @@ export function RoleGuard({ children, allowedRoles }: RoleGuardProps) {
   }
 
   if (!user || !allowedRoles.includes(user.role)) {
-    router.replace('/login');
-    return null;
+    return <Redirect href="/login" />;
   }
 
   return <>{children}</>;

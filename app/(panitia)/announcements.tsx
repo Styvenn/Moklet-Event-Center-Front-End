@@ -1,10 +1,21 @@
 // app/(panitia)/announcements.tsx
 import React, { useState, useCallback, useEffect } from "react";
 import {
-  View, Text, StyleSheet, SafeAreaView, Platform, FlatList,
-  TouchableOpacity, ActivityIndicator, RefreshControl, Modal, TextInput, Alert, ScrollView,
+  View,
+  Text,
+  StyleSheet,
+  Platform,
+  FlatList,
+  TouchableOpacity,
+  ActivityIndicator,
+  RefreshControl,
+  Modal,
+  TextInput,
+  Alert,
+  ScrollView,
   KeyboardAvoidingView,
-} from "react-native";
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
 import { Colors, Spacing, Radius } from "../../constants/theme";

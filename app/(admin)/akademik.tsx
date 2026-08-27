@@ -4,9 +4,9 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   Platform,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   TextInput,
   ActivityIndicator,
   Alert,
@@ -16,12 +16,14 @@ import {
   RefreshControl,
   Animated,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius } from '../../constants/theme';
 import {
   getClasses,
   createClass,
   deleteClass,
+  hideClass,
   ClassItem,
   GradeOption,
 } from '../../services/admin/classes.service';
@@ -30,40 +32,33 @@ import {
   updateSystemSetting,
   SystemSetting,
 } from '../../services/admin/system-setting.service';
-import { useDragToClose } from '../../hooks/useDragToClose';
-
+import { useDragToClose } from '../../components/useDragToClose';
 import { getErrorMessage } from '../../services/api';
 
-// ─── Helpers ───────────────────────────────────────────────────────────────────
+// ─── Helpers: Jurusan & Grade Colors ──────────────────────────────────────────
 
-/**
- * Parse error dari backend saat hapus kelas.
- * Jika ada siswa yang terhubung atau terjadi error 500/FK constraint, tampilkan pesan informatif.
- */
-function parseDeleteClassError(e: any): string {
-  const msg: string = (
-    e?.formattedMessage ||
-    (typeof e?.message === 'string' ? e.message : '') ||
-    (Array.isArray(e?.message) ? e.message.join(' ') : '') ||
-    e?.response?.data?.message ||
-    ''
-  ).toLowerCase();
+const GRADE_OPTIONS: GradeOption[] = ['X', 'XI', 'XII'];
+const MAJOR_SUGGESTIONS = ['RPL', 'TKJ', 'PG'];
 
-  if (
-    msg.includes('student') ||
-    msg.includes('foreign key') ||
-    msg.includes('constraint') ||
-    msg.includes('related') ||
-    msg.includes('siswa') ||
-    msg.includes('p2003') ||
-    msg.includes('p2014') ||
-    msg.includes('internal server error') ||
-    msg.includes('terhubung dengan data lain') ||
-    e?.statusCode === 500
-  ) {
-    return 'Kelas tidak dapat dihapus karena masih memiliki data siswa yang terdaftar di dalamnya.\n\nPindahkan atau hapus semua siswa dari kelas ini terlebih dahulu di menu Data Siswa, lalu coba lagi.';
+function getGradeColor(grade: string) {
+  switch (grade) {
+    case 'X':
+      return { bg: '#E3F2FD', text: '#1565C0', border: '#90CAF9' };
+    case 'XI':
+      return { bg: '#F3E5F5', text: '#7B1FA2', border: '#CE93D8' };
+    case 'XII':
+      return { bg: '#FFEBEE', text: '#C62828', border: '#FFCDD2' };
+    default:
+      return { bg: '#ECEFF1', text: '#455A64', border: '#CFD8DC' };
   }
-  return getErrorMessage(e, 'Tidak dapat menghapus kelas. Coba lagi.');
+}
+
+function getMajorFullName(name: string) {
+  const upper = name.toUpperCase();
+  if (upper.includes('RPL')) return 'Rekayasa Perangkat Lunak';
+  if (upper.includes('TKJ')) return 'Teknik Komputer & Jaringan';
+  if (upper.includes('PG')) return 'Pengembangan Gim';
+  return 'Jurusan';
 }
 
 // ─── Modal Tambah Kelas ────────────────────────────────────────────────────────
@@ -74,33 +69,39 @@ interface AddClassModalProps {
   onSuccess: () => void;
 }
 
-const GRADE_OPTIONS: GradeOption[] = ['X', 'XI', 'XII'];
-
 function AddClassModal({ visible, onClose, onSuccess }: AddClassModalProps) {
   const [grade, setGrade] = useState<GradeOption>('X');
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const reset = () => { setGrade('X'); setName(''); setError(''); };
-  const handleClose = () => { reset(); onClose(); };
+  const reset = () => {
+    setGrade('X');
+    setName('');
+    setError('');
+  };
+  const handleClose = () => {
+    reset();
+    onClose();
+  };
 
   const { translateY, overlayOpacity, panResponder } = useDragToClose(handleClose);
 
   const handleSubmit = async () => {
     let cleanName = name.trim();
     if (!cleanName) {
-      setError('Nama kelas wajib diisi.');
+      setError('Nama jurusan & rombel wajib diisi (contoh: RPL 1 atau PG 2).');
       return;
     }
-    // Jika user mengetik "X RPL 1" padahal grade sudah dipilih "X", bersihkan prefix grade ganda
-    const prefixRegex = new RegExp(`^${grade}\\s+`, 'i');
+
+    // Bersihkan prefix grade jika user mengetik "X RPL 1"
+    const prefixRegex = new RegExp(`^${grade}\\s*[-–—]?\\s*`, 'i');
     if (prefixRegex.test(cleanName)) {
       cleanName = cleanName.replace(prefixRegex, '').trim();
     }
 
-    if (!cleanName) {
-      setError('Nama kelas tidak boleh kosong.');
+    if (cleanName.length < 2) {
+      setError('Nama kelas terlalu pendek. Masukkan jurusan dan nomor rombel (misal: RPL 1).');
       return;
     }
 
@@ -111,7 +112,7 @@ function AddClassModal({ visible, onClose, onSuccess }: AddClassModalProps) {
       reset();
       onSuccess();
     } catch (e: any) {
-      setError(getErrorMessage(e, 'Gagal menambah kelas. Pastikan nama kelas belum terdaftar pada grade ini.'));
+      setError(getErrorMessage(e, `Gagal menambah kelas. Pastikan kelas ${grade} ${cleanName} belum terdaftar.`));
     } finally {
       setLoading(false);
     }
@@ -125,19 +126,25 @@ function AddClassModal({ visible, onClose, onSuccess }: AddClassModalProps) {
       statusBarTranslucent
       onRequestClose={handleClose}
     >
-      <Animated.View style={[ms.overlay, { opacity: overlayOpacity }]} />
+      {/* Backdrop: Ketuk area luar untuk menutup modal */}
+      <TouchableWithoutFeedback onPress={handleClose}>
+        <Animated.View style={[ms.overlay, { opacity: overlayOpacity }]} />
+      </TouchableWithoutFeedback>
+
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={ms.sheetContainer}
         pointerEvents="box-none"
       >
         <Animated.View style={[ms.sheet, { transform: [{ translateY }] }]}>
+          {/* Draggable Handle */}
           <View {...panResponder.panHandlers} style={ms.handleArea}>
             <View style={ms.handle} />
           </View>
+
           <View style={ms.sheetHeader}>
             <Text style={ms.sheetTitle}>Tambah Kelas</Text>
-            <TouchableOpacity onPress={handleClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <TouchableOpacity onPress={handleClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <Ionicons name="close" size={24} color="#607D8B" />
             </TouchableOpacity>
           </View>
@@ -160,9 +167,36 @@ function AddClassModal({ visible, onClose, onSuccess }: AddClassModalProps) {
 
           {/* Nama Kelas */}
           <Text style={ms.label}>Nama Jurusan & Rombel *</Text>
+          
+          {/* Quick Major Selection Chips */}
+          <View style={ms.majorChipsRow}>
+            {MAJOR_SUGGESTIONS.map((major) => (
+              <TouchableOpacity
+                key={major}
+                style={[
+                  ms.majorChip,
+                  name.toUpperCase().startsWith(major) && ms.majorChipActive,
+                ]}
+                onPress={() => {
+                  setName(`${major} 1`);
+                  if (error) setError('');
+                }}
+              >
+                <Text
+                  style={[
+                    ms.majorChipText,
+                    name.toUpperCase().startsWith(major) && ms.majorChipTextActive,
+                  ]}
+                >
+                  +{major}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
           <TextInput
             style={ms.input}
-            placeholder="Contoh: RPL 1, TKJ 2, Animasi 1"
+            placeholder="Contoh: RPL 1, TKJ 2, PG 1"
             placeholderTextColor="#9E9E9E"
             value={name}
             onChangeText={(t) => {
@@ -171,10 +205,15 @@ function AddClassModal({ visible, onClose, onSuccess }: AddClassModalProps) {
             }}
           />
           <Text style={ms.hintText}>
-            ℹ Format nama yang akan disimpan: {grade} - {name.trim() || 'RPL 1'}
+            ℹ Format nama kelas yang akan tersimpan: <Text style={{ fontWeight: '700', color: Colors.primary }}>{grade} {name.trim() || 'PG 1'}</Text>
           </Text>
 
-          {error ? <Text style={ms.errorText}>{error}</Text> : null}
+          {error ? (
+            <View style={ms.errorBox}>
+              <Ionicons name="alert-circle-outline" size={16} color={Colors.primary} />
+              <Text style={ms.errorText}>{error}</Text>
+            </View>
+          ) : null}
 
           <TouchableOpacity
             style={[ms.submitBtn, (loading || !name.trim()) && { opacity: 0.5 }]}
@@ -207,7 +246,6 @@ function ChangeAcademicYearModal({ visible, current, onClose, onSuccess }: Chang
   // Pre-fill dari nilai saat ini
   useEffect(() => {
     if (visible && current) {
-      // Suggest next year (e.g., "2024/2025" → "2025/2026")
       const parts = current.currentAcademicYear.split('/');
       if (parts.length === 2) {
         const nextStart = parseInt(parts[0]) + 1;
@@ -220,15 +258,28 @@ function ChangeAcademicYearModal({ visible, current, onClose, onSuccess }: Chang
     }
   }, [visible, current]);
 
-  const reset = () => { setNewYear(''); setNewAngkatan(''); setError(''); };
-  const handleClose = () => { reset(); onClose(); };
+  const reset = () => {
+    setNewYear('');
+    setNewAngkatan('');
+    setError('');
+  };
+  const handleClose = () => {
+    reset();
+    onClose();
+  };
 
   const { translateY, overlayOpacity, panResponder } = useDragToClose(handleClose);
 
   const handleSubmit = async () => {
-    if (!newYear.trim()) { setError('Tahun ajaran baru wajib diisi.'); return; }
+    if (!newYear.trim()) {
+      setError('Tahun ajaran baru wajib diisi (contoh: 2025/2026).');
+      return;
+    }
     const angkatanNum = parseInt(newAngkatan);
-    if (isNaN(angkatanNum)) { setError('Angkatan tertinggi baru harus berupa angka.'); return; }
+    if (isNaN(angkatanNum) || angkatanNum < 1) {
+      setError('Angkatan tertinggi harus berupa angka valid.');
+      return;
+    }
 
     setLoading(true);
     setError('');
@@ -240,7 +291,7 @@ function ChangeAcademicYearModal({ visible, current, onClose, onSuccess }: Chang
       reset();
       onSuccess(updated);
     } catch (e: any) {
-      setError(e?.message || 'Gagal menyimpan pengaturan. Coba lagi.');
+      setError(getErrorMessage(e, 'Gagal menyimpan pengaturan tahun ajaran. Coba lagi.'));
     } finally {
       setLoading(false);
     }
@@ -254,7 +305,10 @@ function ChangeAcademicYearModal({ visible, current, onClose, onSuccess }: Chang
       statusBarTranslucent
       onRequestClose={handleClose}
     >
-      <Animated.View style={[ms.overlay, { opacity: overlayOpacity }]} />
+      <TouchableWithoutFeedback onPress={handleClose}>
+        <Animated.View style={[ms.overlay, { opacity: overlayOpacity }]} />
+      </TouchableWithoutFeedback>
+
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={ms.sheetContainer}
@@ -266,7 +320,7 @@ function ChangeAcademicYearModal({ visible, current, onClose, onSuccess }: Chang
           </View>
           <View style={ms.sheetHeader}>
             <Text style={ms.sheetTitle}>⚠️ Ganti Tahun Ajaran</Text>
-            <TouchableOpacity onPress={handleClose}>
+            <TouchableOpacity onPress={handleClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <Ionicons name="close" size={24} color="#607D8B" />
             </TouchableOpacity>
           </View>
@@ -275,13 +329,13 @@ function ChangeAcademicYearModal({ visible, current, onClose, onSuccess }: Chang
           <View style={ms.warningBox}>
             <Ionicons name="warning" size={20} color="#B71C1C" />
             <Text style={ms.warningText}>
-              Mengganti tahun ajaran akan mempengaruhi seluruh data kelas dan siswa aktif. Tindakan ini{' '}
+              Mengganti tahun ajaran akan mempengaruhi data kelas dan siswa aktif. Tindakan ini{' '}
               <Text style={{ fontWeight: '800' }}>tidak bisa dibatalkan</Text>. Pastikan data sudah
-              dibackup sebelum melanjutkan.
+              sesuai sebelum melanjutkan.
             </Text>
           </View>
 
-          {/* Tahun Ajaran Sekarang (readonly info) */}
+          {/* Tahun Ajaran Sekarang */}
           {current && (
             <View style={ms.currentInfoRow}>
               <Text style={ms.currentInfoLabel}>Saat ini:</Text>
@@ -305,17 +359,22 @@ function ChangeAcademicYearModal({ visible, current, onClose, onSuccess }: Chang
           <Text style={ms.label}>Angkatan Tertinggi Baru *</Text>
           <TextInput
             style={ms.input}
-            placeholder="Contoh: 2023"
+            placeholder="Contoh: 33"
             placeholderTextColor="#9E9E9E"
             keyboardType="numeric"
             value={newAngkatan}
             onChangeText={setNewAngkatan}
           />
           <Text style={ms.hintText}>
-            ℹ Angkatan tertinggi = tahun masuk kelas XII saat ini. Contoh: jika kelas XII masuk 2023, isi 2023.
+            ℹ Angkatan tertinggi = angkatan siswa kelas XII saat ini (contoh: 33).
           </Text>
 
-          {error ? <Text style={ms.errorText}>{error}</Text> : null}
+          {error ? (
+            <View style={ms.errorBox}>
+              <Ionicons name="alert-circle-outline" size={16} color={Colors.primary} />
+              <Text style={ms.errorText}>{error}</Text>
+            </View>
+          ) : null}
 
           {/* Actions */}
           <View style={ms.btnRow}>
@@ -344,6 +403,7 @@ function ChangeAcademicYearModal({ visible, current, onClose, onSuccess }: Chang
 
 export default function AkademikScreen() {
   const [classes, setClasses] = useState<ClassItem[]>([]);
+  const [selectedGradeFilter, setSelectedGradeFilter] = useState<'ALL' | GradeOption>('ALL');
   const [systemSetting, setSystemSetting] = useState<SystemSetting | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -366,8 +426,14 @@ export default function AkademikScreen() {
     }
   }, []);
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
-  const onRefresh = () => { setRefreshing(true); fetchAll(); };
+  useEffect(() => {
+    fetchAll();
+  }, [fetchAll]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchAll();
+  };
 
   const handleDeleteClass = (cls: ClassItem) => {
     const studentCount = cls._count?.students ?? cls.studentCount;
@@ -376,8 +442,8 @@ export default function AkademikScreen() {
     Alert.alert(
       'Hapus Kelas',
       hasStudents
-        ? `Kelas "${cls.grade} — ${cls.name}" masih memiliki ${studentCount} siswa.\n\nApakah Anda yakin ingin menghapus kelas ini? Siswa di kelas ini perlu dipindahkan terlebih dahulu.`
-        : `Yakin ingin menghapus "${cls.grade} — ${cls.name}"?`,
+        ? `Kelas "${cls.grade} — ${cls.name}" masih memiliki ${studentCount} siswa aktif.\n\nApakah Anda yakin ingin menghapus kelas ini?`
+        : `Yakin ingin menghapus kelas "${cls.grade} — ${cls.name}"?`,
       [
         { text: 'Batal', style: 'cancel' },
         {
@@ -388,7 +454,22 @@ export default function AkademikScreen() {
               await deleteClass(cls.id);
               setClasses((prev) => prev.filter((c) => c.id !== cls.id));
             } catch (e: any) {
-              Alert.alert('Gagal Menghapus Kelas', parseDeleteClassError(e));
+              // Jika server menolak penghapusan permanen karena riwayat arsip database
+              Alert.alert(
+                'Arsip Siswa Terdeteksi di Server',
+                `Kelas "${cls.grade} — ${cls.name}" tidak dapat dihapus permanen dari server karena database masih menyimpan arsip riwayat data siswa yang pernah terdaftar di kelas ini.\n\nApakah Anda ingin menyembunyikan kelas ini dari daftar?`,
+                [
+                  { text: 'Batal', style: 'cancel' },
+                  {
+                    text: 'Sembunyikan Kelas',
+                    style: 'destructive',
+                    onPress: async () => {
+                      await hideClass(cls.id);
+                      setClasses((prev) => prev.filter((c) => c.id !== cls.id));
+                    },
+                  },
+                ]
+              );
             }
           },
         },
@@ -396,35 +477,57 @@ export default function AkademikScreen() {
     );
   };
 
-  // Group classes by grade
-  const grouped: { [key: string]: ClassItem[] } = { X: [], XI: [], XII: [] };
-  classes.forEach((c) => {
-    if (grouped[c.grade]) grouped[c.grade].push(c);
+  // Filter kelas berdasarkan grade filter aktif
+  const filteredClasses = classes.filter((c) => {
+    if (selectedGradeFilter === 'ALL') return true;
+    return c.grade === selectedGradeFilter;
   });
 
-  const renderClass = (cls: ClassItem) => (
-    <View key={cls.id} style={styles.classCard}>
-      <View style={styles.classGradeBadge}>
-        <Text style={styles.classGradeText}>{cls.grade}</Text>
+  const renderClassCard = (cls: ClassItem) => {
+    const gradeColor = getGradeColor(cls.grade);
+    const majorName = getMajorFullName(cls.name);
+    const count = cls._count?.students ?? cls.studentCount ?? 0;
+
+    return (
+      <View key={cls.id} style={styles.classCard}>
+        {/* Avatar Bulat Standar (seperti Siswa & Panitia) */}
+        <View style={[styles.classAvatar, { backgroundColor: gradeColor.bg, borderColor: gradeColor.border }]}>
+          <Text style={[styles.classAvatarText, { color: gradeColor.text }]}>{cls.grade}</Text>
+        </View>
+
+        {/* Info Kelas */}
+        <View style={styles.classInfo}>
+          <Text style={styles.className} numberOfLines={1}>
+            Kelas {cls.grade} {cls.name}
+          </Text>
+          <Text style={styles.classMeta}>
+            {majorName} • {count > 0 ? `${count} siswa terdaftar` : 'Belum ada siswa'}
+          </Text>
+        </View>
+
+        {/* Student Count Badge */}
+        <View style={[styles.countBadge, count > 0 ? styles.countBadgeActive : styles.countBadgeEmpty]}>
+          <Ionicons
+            name="people-outline"
+            size={13}
+            color={count > 0 ? '#2E7D32' : '#757575'}
+          />
+          <Text style={[styles.countBadgeText, count > 0 ? styles.countBadgeActiveText : styles.countBadgeEmptyText]}>
+            {count}
+          </Text>
+        </View>
+
+        {/* Action Delete */}
+        <TouchableOpacity
+          style={styles.classDeleteBtn}
+          onPress={() => handleDeleteClass(cls)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons name="trash-outline" size={18} color="#EF5350" />
+        </TouchableOpacity>
       </View>
-      <Text style={styles.className}>{cls.name}</Text>
-      {cls._count?.students !== undefined && (
-        <Text style={[
-          styles.classStudentCount,
-          cls._count.students > 0 && styles.classStudentCountHasStudents,
-        ]}>
-          {cls._count.students} siswa
-        </Text>
-      )}
-      <TouchableOpacity
-        style={styles.classDeleteBtn}
-        onPress={() => handleDeleteClass(cls)}
-        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-      >
-        <Ionicons name="trash-outline" size={16} color="#EF5350" />
-      </TouchableOpacity>
-    </View>
-  );
+    );
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -435,96 +538,105 @@ export default function AkademikScreen() {
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />
         }
       >
-        {/* ── Tahun Ajaran ── */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Tahun Ajaran</Text>
-        </View>
-
-        {loading ? (
-          <View style={styles.loaderContainer}>
-            <ActivityIndicator color={Colors.primary} />
-          </View>
-        ) : systemSetting ? (
-          <View style={styles.settingCard}>
-            <View style={styles.settingCardRow}>
-              <View>
-                <Text style={styles.settingLabel}>Tahun Ajaran Aktif</Text>
-                <Text style={styles.settingValue}>{systemSetting.currentAcademicYear}</Text>
-              </View>
-              <View style={styles.activeBadge}>
-                <Text style={styles.activeBadgeText}>✓ Aktif</Text>
-              </View>
-            </View>
-            <View style={styles.settingDivider} />
-            <View style={styles.settingCardRow}>
-              <View>
-                <Text style={styles.settingLabel}>Angkatan Tertinggi (Kelas XII)</Text>
-                <Text style={styles.settingValue}>Angkatan {systemSetting.currentTopAngkatan}</Text>
-              </View>
-            </View>
-            {systemSetting.updatedAt && (
-              <Text style={styles.settingUpdated}>
-                Terakhir diperbarui:{' '}
-                {new Date(systemSetting.updatedAt).toLocaleDateString('id-ID', {
-                  day: 'numeric', month: 'long', year: 'numeric',
-                })}
+        {/* System Setting Card */}
+        <View style={styles.settingCard}>
+          <View style={styles.settingHeader}>
+            <View>
+              <Text style={styles.settingSub}>Angkatan Tertinggi (Kelas XII)</Text>
+              <Text style={styles.settingAngkatan}>
+                Angkatan {systemSetting?.currentTopAngkatan ?? '—'}
               </Text>
-            )}
-
-            <TouchableOpacity
-              style={styles.dangerActionBtn}
-              onPress={() => setShowChangeYearModal(true)}
-            >
-              <Ionicons name="warning-outline" size={16} color="#B71C1C" />
-              <Text style={styles.dangerActionBtnText}>Ganti Tahun Ajaran / Naik Kelas</Text>
-            </TouchableOpacity>
+            </View>
+            <View style={styles.settingBadge}>
+              <Text style={styles.settingBadgeText}>
+                {systemSetting?.currentAcademicYear ?? '—'}
+              </Text>
+            </View>
           </View>
-        ) : (
-          <View style={styles.errorCard}>
-            <Text style={styles.errorCardText}>Gagal memuat pengaturan sistem.</Text>
-            <TouchableOpacity onPress={fetchAll}>
-              <Text style={{ color: Colors.primary, fontWeight: '700' }}>Coba lagi</Text>
-            </TouchableOpacity>
-          </View>
-        )}
 
-        {/* ── Kelola Kelas ── */}
-        <View style={[styles.sectionHeader, { marginTop: Spacing.xl }]}>
-          <Text style={styles.sectionTitle}>Kelola Kelas</Text>
+          <Text style={styles.settingUpdated}>
+            Terakhir diperbarui:{' '}
+            {systemSetting?.updatedAt
+              ? new Date(systemSetting.updatedAt).toLocaleDateString('id-ID', {
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric',
+                })
+              : '—'}
+          </Text>
+
           <TouchableOpacity
-            style={styles.addClassBtn}
-            onPress={() => setShowAddClassModal(true)}
+            style={styles.changeYearBtn}
+            onPress={() => setShowChangeYearModal(true)}
+            activeOpacity={0.8}
           >
-            <Ionicons name="add" size={18} color="#fff" />
-            <Text style={styles.addClassBtnText}>Tambah</Text>
+            <Ionicons name="warning-outline" size={16} color="#B71C1C" />
+            <Text style={styles.changeYearBtnText}>Ganti Tahun Ajaran / Naik Kelas</Text>
           </TouchableOpacity>
         </View>
 
-        {loading ? (
-          <View style={styles.loaderContainer}>
-            <ActivityIndicator color={Colors.primary} />
+        {/* Kelola Kelas Header */}
+        <View style={styles.classesSectionHeader}>
+          <View>
+            <Text style={styles.sectionTitle}>Kelola Kelas</Text>
+            <Text style={styles.sectionSub}>{classes.length} kelas terdaftar di sistem</Text>
           </View>
-        ) : classes.length === 0 ? (
-          <View style={styles.emptyClasses}>
-            <Ionicons name="library-outline" size={40} color="#BDBDBD" />
-            <Text style={styles.emptyClassesText}>Belum ada kelas. Ketuk "Tambah" untuk mulai.</Text>
+          <TouchableOpacity
+            style={styles.addClassBtn}
+            onPress={() => setShowAddClassModal(true)}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="add" size={18} color="#fff" />
+            <Text style={styles.addClassBtnText}>Tambah Kelas</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Filter Tingkat (Grade Tabs) */}
+        <View style={styles.filterTabsRow}>
+          {(['ALL', 'X', 'XI', 'XII'] as const).map((filterKey) => (
+            <TouchableOpacity
+              key={filterKey}
+              style={[
+                styles.filterTab,
+                selectedGradeFilter === filterKey && styles.filterTabActive,
+              ]}
+              onPress={() => setSelectedGradeFilter(filterKey)}
+            >
+              <Text
+                style={[
+                  styles.filterTabText,
+                  selectedGradeFilter === filterKey && styles.filterTabTextActive,
+                ]}
+              >
+                {filterKey === 'ALL' ? 'Semua' : `Kelas ${filterKey}`}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {loading ? (
+          <View style={styles.loaderBox}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+            <Text style={styles.loaderText}>Memuat data kelas...</Text>
+          </View>
+        ) : filteredClasses.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="school-outline" size={56} color="#BDBDBD" />
+            <Text style={styles.emptyTitle}>
+              {selectedGradeFilter === 'ALL'
+                ? 'Belum ada kelas terdaftar'
+                : `Belum ada kelas ${selectedGradeFilter}`}
+            </Text>
+            <Text style={styles.emptySubtitle}>
+              Ketuk tombol "Tambah Kelas" di atas untuk membuat kelas baru.
+            </Text>
           </View>
         ) : (
-          <>
-            {(['X', 'XI', 'XII'] as GradeOption[]).map((g) =>
-              grouped[g].length > 0 ? (
-                <View key={g}>
-                  <Text style={styles.gradeGroupLabel}>Kelas {g}</Text>
-                  {grouped[g].map(renderClass)}
-                </View>
-              ) : null
-            )}
-          </>
+          <View style={styles.classList}>{filteredClasses.map(renderClassCard)}</View>
         )}
       </ScrollView>
 
@@ -537,6 +649,7 @@ export default function AkademikScreen() {
           fetchAll();
         }}
       />
+
       <ChangeAcademicYearModal
         visible={showChangeYearModal}
         current={systemSetting || undefined}
@@ -544,11 +657,7 @@ export default function AkademikScreen() {
         onSuccess={(updated) => {
           setSystemSetting(updated);
           setShowChangeYearModal(false);
-          Alert.alert(
-            'Berhasil',
-            `Tahun ajaran berhasil diubah ke ${updated.currentAcademicYear}.`,
-            [{ text: 'OK' }]
-          );
+          fetchAll();
         }}
       />
     </SafeAreaView>
@@ -564,8 +673,6 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'android' ? 36 : 0,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: '#fff',
     paddingHorizontal: Spacing.base,
     paddingVertical: 12,
@@ -581,102 +688,86 @@ const styles = StyleSheet.create({
     padding: Spacing.base,
     paddingBottom: 40,
   },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: Spacing.md,
-  },
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#1E1E1E',
-  },
-  loaderContainer: {
-    paddingVertical: 32,
-    alignItems: 'center',
-  },
-  // Tahun Ajaran Card
   settingCard: {
     backgroundColor: '#fff',
     borderRadius: Radius.xl,
     padding: Spacing.base,
+    marginBottom: Spacing.lg,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 1,
   },
-  settingCardRow: {
+  settingHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    paddingVertical: 6,
   },
-  settingDivider: {
-    height: 1,
-    backgroundColor: '#F0F0F0',
-    marginVertical: 6,
-  },
-  settingLabel: {
+  settingSub: {
     fontSize: 12,
     color: '#757575',
-    marginBottom: 3,
+    fontWeight: '600',
   },
-  settingValue: {
-    fontSize: 18,
-    fontWeight: '700',
+  settingAngkatan: {
+    fontSize: 22,
+    fontWeight: '800',
     color: '#1E1E1E',
+    marginTop: 2,
   },
-  activeBadge: {
-    backgroundColor: '#E8F5E9',
+  settingBadge: {
+    backgroundColor: '#FFEBEE',
     borderRadius: Radius.round,
     paddingHorizontal: 12,
     paddingVertical: 4,
   },
-  activeBadgeText: {
+  settingBadgeText: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#2E7D32',
-  },
-  settingUpdated: {
-    fontSize: 11,
-    color: '#9E9E9E',
-    marginTop: 8,
-  },
-  dangerActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: Spacing.md,
-    paddingTop: Spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: '#FFEBEE',
-  },
-  dangerActionBtnText: {
-    fontSize: 14,
     fontWeight: '700',
     color: '#B71C1C',
   },
-  errorCard: {
-    backgroundColor: '#FFF3E0',
-    borderRadius: Radius.xl,
-    padding: Spacing.base,
+  settingUpdated: {
+    fontSize: 12,
+    color: '#9E9E9E',
+    marginTop: Spacing.sm,
+  },
+  changeYearBtn: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
+    marginTop: Spacing.md,
+    paddingTop: Spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
   },
-  errorCardText: {
-    fontSize: 14,
-    color: '#E65100',
+  changeYearBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#B71C1C',
   },
-  // Kelola Kelas
+  classesSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.sm,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#1E1E1E',
+  },
+  sectionSub: {
+    fontSize: 12,
+    color: '#757575',
+    marginTop: 2,
+  },
   addClassBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.primary,
-    borderRadius: Radius.xl,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
+    borderRadius: Radius.round,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     gap: 4,
   },
   addClassBtnText: {
@@ -684,14 +775,33 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 13,
   },
-  gradeGroupLabel: {
-    fontSize: 13,
+  filterTabsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginVertical: Spacing.md,
+  },
+  filterTab: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: Radius.round,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  filterTabActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  filterTabText: {
+    fontSize: 12,
     fontWeight: '700',
-    color: '#9E9E9E',
-    marginBottom: 6,
-    marginTop: 4,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    color: '#616161',
+  },
+  filterTabTextActive: {
+    color: '#fff',
+  },
+  classList: {
+    gap: Spacing.sm,
   },
   classCard: {
     flexDirection: 'row',
@@ -699,59 +809,91 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: Radius.xl,
     padding: Spacing.md,
-    marginBottom: Spacing.sm,
+    gap: Spacing.md,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
-    shadowRadius: 4,
+    shadowRadius: 6,
     elevation: 1,
-    gap: Spacing.sm,
   },
-  classGradeBadge: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.primaryLight,
+  classAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
-  classGradeText: {
-    fontSize: 12,
+  classAvatarText: {
+    fontSize: 16,
     fontWeight: '800',
-    color: Colors.primary,
+  },
+  classInfo: {
+    flex: 1,
+    gap: 3,
   },
   className: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
     color: '#1E1E1E',
   },
-  classStudentCount: {
+  classMeta: {
     fontSize: 12,
-    color: '#9E9E9E',
+    color: '#757575',
   },
-  classStudentCountHasStudents: {
-    color: '#F57F17',
-    fontWeight: '600',
+  countBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: Radius.round,
+  },
+  countBadgeActive: {
+    backgroundColor: '#E8F5E9',
+  },
+  countBadgeEmpty: {
+    backgroundColor: '#F5F5F5',
+  },
+  countBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  countBadgeActiveText: {
+    color: '#2E7D32',
+  },
+  countBadgeEmptyText: {
+    color: '#757575',
   },
   classDeleteBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#FFEBEE',
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: 8,
+    borderRadius: Radius.md,
   },
-  emptyClasses: {
+  loaderBox: {
+    paddingVertical: 40,
     alignItems: 'center',
-    paddingVertical: 32,
-    gap: 12,
+    gap: 10,
   },
-  emptyClassesText: {
+  loaderText: {
+    color: '#757575',
     fontSize: 13,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    gap: 10,
+  },
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#616161',
+  },
+  emptySubtitle: {
+    fontSize: 12,
     color: '#9E9E9E',
     textAlign: 'center',
+    paddingHorizontal: 20,
   },
 });
 
@@ -759,7 +901,7 @@ const styles = StyleSheet.create({
 const ms = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
   sheetContainer: {
     flex: 1,
@@ -770,18 +912,19 @@ const ms = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: Spacing.base,
+    paddingBottom: Platform.OS === 'ios' ? 36 : Spacing.base,
   },
   handleArea: {
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: 12,
     marginTop: -8,
     marginHorizontal: -Spacing.base,
   },
   handle: {
-    width: 40,
-    height: 4,
-    backgroundColor: '#E0E0E0',
-    borderRadius: 2,
+    width: 44,
+    height: 5,
+    backgroundColor: '#CBD5E1',
+    borderRadius: 3,
   },
   sheetHeader: {
     flexDirection: 'row',
@@ -802,6 +945,57 @@ const ms = StyleSheet.create({
     marginTop: Spacing.md,
     marginBottom: 6,
   },
+  gradeRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  gradeBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: Radius.md,
+    borderWidth: 1.5,
+    borderColor: '#E0E0E0',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+  },
+  gradeBtnActive: {
+    borderColor: Colors.primary,
+    backgroundColor: '#FFEBEE',
+  },
+  gradeBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#757575',
+  },
+  gradeBtnTextActive: {
+    color: Colors.primary,
+    fontWeight: '800',
+  },
+  majorChipsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 8,
+  },
+  majorChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: Radius.round,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  majorChipActive: {
+    backgroundColor: '#FFEBEE',
+    borderColor: Colors.primary,
+  },
+  majorChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  majorChipTextActive: {
+    color: Colors.primary,
+  },
   input: {
     backgroundColor: '#F5F5F5',
     borderRadius: Radius.lg,
@@ -811,102 +1005,58 @@ const ms = StyleSheet.create({
     color: '#1E1E1E',
   },
   hintText: {
-    fontSize: 11,
-    color: '#9E9E9E',
-    marginTop: 4,
-    fontStyle: 'italic',
-  },
-  gradeRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  gradeBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: Radius.lg,
-    backgroundColor: '#F5F5F5',
-    alignItems: 'center',
-  },
-  gradeBtnActive: {
-    backgroundColor: Colors.primary,
-  },
-  gradeBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 12,
     color: '#757575',
-  },
-  gradeBtnTextActive: {
-    color: '#fff',
+    marginTop: 6,
   },
   warningBox: {
     flexDirection: 'row',
     backgroundColor: '#FFEBEE',
-    borderLeftWidth: 3,
-    borderLeftColor: '#B71C1C',
     borderRadius: Radius.lg,
     padding: Spacing.md,
     gap: 10,
     alignItems: 'flex-start',
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.md,
   },
   warningText: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 12,
     color: '#B71C1C',
-    lineHeight: 20,
+    lineHeight: 18,
   },
   currentInfoRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     backgroundColor: '#F5F5F5',
-    borderRadius: Radius.lg,
     padding: Spacing.md,
+    borderRadius: Radius.md,
     marginBottom: Spacing.sm,
   },
   currentInfoLabel: {
     fontSize: 12,
     color: '#757575',
+    fontWeight: '600',
   },
   currentInfoValue: {
     fontSize: 13,
     fontWeight: '700',
     color: '#1E1E1E',
   },
-  errorText: {
-    color: Colors.primary,
-    fontSize: 13,
-    marginTop: Spacing.sm,
-    textAlign: 'center',
-  },
-  btnRow: {
+  errorBox: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: Spacing.base,
-  },
-  cancelBtn: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: Radius.xl,
-    backgroundColor: '#F5F5F5',
     alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FFEBEE',
+    padding: Spacing.sm,
+    borderRadius: Radius.md,
+    marginTop: Spacing.sm,
   },
-  cancelBtnText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#424242',
-  },
-  dangerBtn: {
+  errorText: {
     flex: 1,
-    paddingVertical: 14,
-    borderRadius: Radius.xl,
-    backgroundColor: '#B71C1C',
-    alignItems: 'center',
-  },
-  dangerBtnText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#fff',
+    color: Colors.primary,
+    fontSize: 12,
+    fontWeight: '600',
   },
   submitBtn: {
     backgroundColor: Colors.primary,
@@ -919,5 +1069,35 @@ const ms = StyleSheet.create({
     color: '#fff',
     fontSize: 15,
     fontWeight: '700',
+  },
+  btnRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginTop: Spacing.base,
+  },
+  cancelBtn: {
+    flex: 1,
+    padding: 16,
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    alignItems: 'center',
+  },
+  cancelBtnText: {
+    color: '#757575',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  dangerBtn: {
+    flex: 1,
+    backgroundColor: '#B71C1C',
+    padding: 16,
+    borderRadius: Radius.xl,
+    alignItems: 'center',
+  },
+  dangerBtnText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 15,
   },
 });
