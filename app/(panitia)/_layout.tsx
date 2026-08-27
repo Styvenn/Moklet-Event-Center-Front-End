@@ -6,13 +6,12 @@ import {
   StyleSheet,
   TouchableOpacity,
   Platform,
-  ActivityIndicator,
 } from "react-native";
-import { Tabs, router } from "expo-router";
+import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Colors } from "../../constants/theme";
-import { useAuth } from "../../context/AuthContext";
+import { RoleGuard } from "../../components/RoleGuard";
 
 const PANITIA_TABS = [
   {
@@ -97,42 +96,20 @@ function PanitiaTabBar({ state, navigation }: any) {
   );
 }
 
-function PanitiaGuard({ children }: { children: React.ReactNode }) {
-  const { user, isLoading } = useAuth();
-  if (isLoading) {
-    return (
-      <View style={styles.guardLoader}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-      </View>
-    );
-  }
-  if (!user || (user.role !== "PANITIA" && user.role !== "SISWA" && user.role !== "ADMIN_KESISWAAN")) {
-    router.replace("/login");
-    return null;
-  }
-  return <>{children}</>;
-}
-
 export default function PanitiaLayout() {
   return (
-    <PanitiaGuard>
+    <RoleGuard allowedRoles={["PANITIA", "SISWA", "ADMIN_KESISWAAN"]}>
       <Tabs screenOptions={{ headerShown: false }} tabBar={(props) => <PanitiaTabBar {...props} />}>
         <Tabs.Screen name="dashboard" options={{ title: "Home" }} />
         <Tabs.Screen name="events/index" options={{ title: "Events" }} />
         <Tabs.Screen name="announcements" options={{ title: "Info" }} />
         <Tabs.Screen name="history" options={{ title: "History" }} />
       </Tabs>
-    </PanitiaGuard>
+    </RoleGuard>
   );
 }
 
 const styles = StyleSheet.create({
-  guardLoader: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#F5F7FA",
-  },
   tabBarWrapper: {
     backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 20,

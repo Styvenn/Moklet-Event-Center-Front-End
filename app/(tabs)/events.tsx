@@ -18,24 +18,11 @@ import { router, useFocusEffect } from 'expo-router';
 import { Colors, Spacing, Radius } from '../../constants/theme';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
+import { formatDate } from '../../utils/date';
 import {
   getManagedEventsForStudent,
   EventItem,
 } from '../../services/panitia/events.service';
-
-function formatDate(dateStr?: string) {
-  if (!dateStr) return '-';
-  try {
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('id-ID', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    });
-  } catch (e) {
-    return dateStr;
-  }
-}
 
 export default function EventsScreen() {
   const { user } = useAuth();

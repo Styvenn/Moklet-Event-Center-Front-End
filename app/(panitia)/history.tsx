@@ -9,12 +9,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import { Colors, Spacing, Radius } from "../../constants/theme";
 import { getEvents, EventItem } from "../../services/panitia/events.service";
-
-function formatDate(d: string) {
-  if (!d) return "-";
-  try { return new Date(d).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }); }
-  catch { return d; }
-}
+import { formatDate } from "../../utils/date";
 
 export default function HistoryEventsScreen() {
   const [events, setEvents] = useState<EventItem[]>([]);

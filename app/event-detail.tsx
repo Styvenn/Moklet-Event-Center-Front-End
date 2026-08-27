@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Colors, Spacing, Radius } from '../constants/theme';
 import api from '../services/api';
+import { formatDate } from '../utils/date';
 
 export interface EventDetail {
   id: string;
@@ -61,16 +62,6 @@ export default function EventDetailScreen() {
 
     fetchEventDetail();
   }, [eventId]);
-
-  const formatDate = (dateStr?: string) => {
-    if (!dateStr) return '-';
-    try {
-      const d = new Date(dateStr);
-      return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
-    } catch (e) {
-      return dateStr;
-    }
-  };
 
   const handleDownloadGuidebook = () => {
     if (event?.guidebookUrl) {
@@ -164,7 +155,7 @@ export default function EventDetailScreen() {
           <Text style={styles.eventTitle}>{event.name}</Text>
           <View style={styles.dateRow}>
             <Ionicons name="calendar-outline" size={15} color={Colors.textSubtitle} />
-            <Text style={styles.dateText}>{formatDate(event.eventDate)}</Text>
+            <Text style={styles.dateText}>{formatDate(event.eventDate, { monthStyle: 'long' })}</Text>
           </View>
           {event.status ? (
             <View style={styles.tagsRow}>

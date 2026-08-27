@@ -1,5 +1,5 @@
 // app/(admin)/siswa.tsx
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -15,7 +15,6 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   RefreshControl,
-  PanResponder,
   Animated,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
@@ -30,6 +29,7 @@ import {
 } from '../../services/admin/students.service';
 import { getClasses, ClassItem } from '../../services/admin/classes.service';
 import { getErrorMessage } from '../../services/api';
+import { useDragToClose } from '../../hooks/useDragToClose';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -37,52 +37,6 @@ const AVATAR_COLORS = ['#EF9A9A', '#CE93D8', '#90CAF9', '#A5D6A7', '#FFE082', '#
 function avatarColor(name: string) {
   const idx = name.charCodeAt(0) % AVATAR_COLORS.length;
   return AVATAR_COLORS[idx];
-}
-
-// ─── Hook: Drag To Close ───────────────────────────────────────────────────────
-
-const DRAG_DISMISS_THRESHOLD = 80;
-const DRAG_MAX_OPACITY = 300; // px sebelum overlay = transparan penuh
-
-function useDragToClose(onClose: () => void) {
-  const translateY = useRef(new Animated.Value(0)).current;
-
-  // Overlay opacity: sinkron dengan drag — makin ke bawah makin transparan
-  const overlayOpacity = translateY.interpolate({
-    inputRange: [0, DRAG_MAX_OPACITY],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 2,
-      onPanResponderMove: (_, gs) => {
-        if (gs.dy > 0) translateY.setValue(gs.dy);
-      },
-      onPanResponderRelease: (_, gs) => {
-        if (gs.dy > DRAG_DISMISS_THRESHOLD) {
-          Animated.timing(translateY, {
-            toValue: 700,
-            duration: 200,
-            useNativeDriver: true,
-          }).start(() => {
-            translateY.setValue(0);
-            onClose();
-          });
-        } else {
-          Animated.spring(translateY, {
-            toValue: 0,
-            useNativeDriver: true,
-            bounciness: 4,
-          }).start();
-        }
-      },
-    })
-  ).current;
-
-  return { translateY, overlayOpacity, panResponder };
 }
 
 // ─── Modal Tambah Siswa ────────────────────────────────────────────────────────

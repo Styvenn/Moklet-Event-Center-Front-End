@@ -14,31 +14,12 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius } from '../../constants/theme';
 import api from '../../services/api';
-
-interface Announcement {
-  id: string;
-  title: string;
-  content: string;
-  createdAt: string;
-  eventId?: string;
-}
-
-// Format ISO date string to readable Indonesian date
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString('id-ID', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    });
-  } catch {
-    return iso;
-  }
-}
+import { formatDate } from '../../utils/date';
+import { AnnouncementItem } from '../../services/panitia/announcements.service';
 
 export default function InfoScreen() {
   const [search, setSearch] = useState('');
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
@@ -48,7 +29,7 @@ export default function InfoScreen() {
         setLoading(true);
         setError(false);
         const res: any = await api.get('/announcements');
-        const list: Announcement[] = Array.isArray(res) ? res : res?.data || [];
+        const list: AnnouncementItem[] = Array.isArray(res) ? res : res?.data || [];
         setAnnouncements(list);
       } catch (err) {
         console.warn('Error fetching announcements in Info:', err);
@@ -110,7 +91,7 @@ export default function InfoScreen() {
               <Text style={styles.annDesc} numberOfLines={3}>{ann.content}</Text>
               <View style={styles.annFooter}>
                 <Ionicons name="calendar-outline" size={13} color={Colors.textSubtitle} />
-                <Text style={styles.annDate}>{formatDate(ann.createdAt)}</Text>
+                <Text style={styles.annDate}>{formatDate(ann.createdAt, { dayStyle: '2-digit' })}</Text>
               </View>
             </TouchableOpacity>
           )}

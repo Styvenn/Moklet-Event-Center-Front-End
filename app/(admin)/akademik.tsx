@@ -1,5 +1,5 @@
 // app/(admin)/akademik.tsx
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,6 @@ import {
   KeyboardAvoidingView,
   ScrollView,
   RefreshControl,
-  PanResponder,
   Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,51 +30,7 @@ import {
   updateSystemSetting,
   SystemSetting,
 } from '../../services/admin/system-setting.service';
-
-// ─── Hook: Drag To Close ───────────────────────────────────────────────────────
-
-const DRAG_DISMISS_THRESHOLD = 80;
-const DRAG_MAX_OPACITY = 300;
-
-function useDragToClose(onClose: () => void) {
-  const translateY = useRef(new Animated.Value(0)).current;
-
-  const overlayOpacity = translateY.interpolate({
-    inputRange: [0, DRAG_MAX_OPACITY],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 2,
-      onPanResponderMove: (_, gs) => {
-        if (gs.dy > 0) translateY.setValue(gs.dy);
-      },
-      onPanResponderRelease: (_, gs) => {
-        if (gs.dy > DRAG_DISMISS_THRESHOLD) {
-          Animated.timing(translateY, {
-            toValue: 700,
-            duration: 200,
-            useNativeDriver: true,
-          }).start(() => {
-            translateY.setValue(0);
-            onClose();
-          });
-        } else {
-          Animated.spring(translateY, {
-            toValue: 0,
-            useNativeDriver: true,
-            bounciness: 4,
-          }).start();
-        }
-      },
-    })
-  ).current;
-
-  return { translateY, overlayOpacity, panResponder };
-}
+import { useDragToClose } from '../../hooks/useDragToClose';
 
 import { getErrorMessage } from '../../services/api';
 

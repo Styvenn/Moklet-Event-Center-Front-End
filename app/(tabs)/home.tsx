@@ -20,6 +20,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { Colors, Spacing, Radius } from '../../constants/theme';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
+import { formatDate } from '../../utils/date';
 import {
   getManagedEventsForStudent,
   EventItem,
@@ -31,20 +32,6 @@ import {
 
 const { width } = Dimensions.get('window');
 const BANNER_WIDTH = width - Spacing.xl * 2;
-
-function formatDate(dateStr?: string) {
-  if (!dateStr) return '-';
-  try {
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('id-ID', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    });
-  } catch (e) {
-    return dateStr;
-  }
-}
 
 function formatRelativeTime(isoStr: string): string {
   if (!isoStr) return '';

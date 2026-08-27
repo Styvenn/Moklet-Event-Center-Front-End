@@ -1,11 +1,11 @@
 // app/(admin)/_layout.tsx
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform, ActivityIndicator } from 'react-native';
-import { Tabs, router } from 'expo-router';
+import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/theme';
-import { useAuth } from '../../context/AuthContext';
+import { RoleGuard } from '../../components/RoleGuard';
 
 const ADMIN_TABS = [
   { name: 'dashboard', label: 'Home', icon: 'home-outline' as const, iconActive: 'home' as const },
@@ -53,30 +53,9 @@ function AdminTabBar({ state, descriptors, navigation }: any) {
   );
 }
 
-/** Route Guard: redirect non-admin users keluar dari stack admin. */
-function AdminGuard({ children }: { children: React.ReactNode }) {
-  const { user, isLoading } = useAuth();
-
-  if (isLoading) {
-    return (
-      <View style={styles.guardLoader}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-      </View>
-    );
-  }
-
-  if (!user || user.role !== 'ADMIN_KESISWAAN') {
-    // Redirect ke login
-    router.replace('/login');
-    return null;
-  }
-
-  return <>{children}</>;
-}
-
 export default function AdminLayout() {
   return (
-    <AdminGuard>
+    <RoleGuard allowedRoles={['ADMIN_KESISWAAN']}>
       <Tabs
         screenOptions={{ headerShown: false }}
         tabBar={(props) => <AdminTabBar {...props} />}
@@ -86,17 +65,11 @@ export default function AdminLayout() {
         <Tabs.Screen name="panitia" />
         <Tabs.Screen name="akademik" />
       </Tabs>
-    </AdminGuard>
+    </RoleGuard>
   );
 }
 
 const styles = StyleSheet.create({
-  guardLoader: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F5F7FA',
-  },
   tabBarContainer: {
     flexDirection: 'row',
     backgroundColor: '#FFFFFF',

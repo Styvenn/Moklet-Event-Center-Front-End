@@ -12,13 +12,8 @@ import {
   getAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement,
   AnnouncementItem,
 } from "../../services/panitia/announcements.service";
+import { formatDate } from "../../utils/date";
 import { getEvents, EventItem } from "../../services/panitia/events.service";
-
-function formatDate(d: string) {
-  if (!d) return "-";
-  try { return new Date(d).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }); }
-  catch { return d; }
-}
 
 export default function AnnouncementsScreen() {
   const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
@@ -131,7 +126,7 @@ export default function AnnouncementsScreen() {
         <View style={{ flex: 1, gap: 2 }}>
           <Text style={styles.cardTitle}>{item.title}</Text>
           <Text style={styles.cardMeta}>
-            Oleh {item.authorName} • {formatDate(item.createdAt)}
+            Oleh {item.authorName} • {formatDate(item.createdAt, { showTime: true })}
           </Text>
         </View>
         <View style={styles.actionBtns}>

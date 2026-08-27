@@ -15,30 +15,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Colors, Spacing, Radius } from '../constants/theme';
 import api from '../services/api';
-
-interface Announcement {
-  id: string;
-  title: string;
-  content: string;
-  createdAt: string;
-  eventId?: string;
-}
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString('id-ID', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    });
-  } catch {
-    return iso;
-  }
-}
+import { formatDate } from '../utils/date';
+import { AnnouncementItem } from '../services/panitia/announcements.service';
 
 export default function ArsipPengumumanScreen() {
   const [search, setSearch] = useState('');
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
@@ -48,7 +30,7 @@ export default function ArsipPengumumanScreen() {
         setLoading(true);
         setError(false);
         const res: any = await api.get('/announcements');
-        const list: Announcement[] = Array.isArray(res) ? res : res?.data || [];
+        const list: AnnouncementItem[] = Array.isArray(res) ? res : res?.data || [];
         setAnnouncements(list);
       } catch (err) {
         console.warn('Error fetching announcements:', err);
@@ -121,7 +103,7 @@ export default function ArsipPengumumanScreen() {
                 <Text style={styles.annDesc} numberOfLines={2}>{ann.content}</Text>
                 <View style={styles.annFooter}>
                   <Ionicons name="calendar-outline" size={11} color={Colors.textSubtitle} />
-                  <Text style={styles.annDate}>{formatDate(ann.createdAt)}</Text>
+                  <Text style={styles.annDate}>{formatDate(ann.createdAt, { dayStyle: '2-digit' })}</Text>
                 </View>
               </View>
             </TouchableOpacity>

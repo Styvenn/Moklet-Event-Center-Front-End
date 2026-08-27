@@ -31,20 +31,7 @@ import {
   createTeam,
   joinTeam,
 } from '../services/registration.service';
-
-function getCategoryIcon(name: string): any {
-  const lower = (name || '').toLowerCase();
-  if (lower.includes('futsal') || lower.includes('bola') || lower.includes('football')) return 'football-outline';
-  if (lower.includes('basket')) return 'basketball-outline';
-  if (lower.includes('esport') || lower.includes('e-sport') || lower.includes('game') || lower.includes('mobile')) return 'game-controller-outline';
-  if (lower.includes('tari') || lower.includes('musik') || lower.includes('seni') || lower.includes('band')) return 'musical-notes-outline';
-  if (lower.includes('robot') || lower.includes('it') || lower.includes('koding') || lower.includes('web')) return 'hardware-chip-outline';
-  if (lower.includes('voli')) return 'fitness-outline';
-  if (lower.includes('lari') || lower.includes('atletik')) return 'walk-outline';
-  if (lower.includes('tarik tambang')) return 'people-outline';
-  if (lower.includes('badminton') || lower.includes('bulutangkis')) return 'tennisball-outline';
-  return 'trophy-outline';
-}
+import { getCategoryIcon } from '../utils/icons';
 
 export default function DaftarLombaScreen() {
   const { eventId } = useLocalSearchParams<{ eventId?: string }>();
