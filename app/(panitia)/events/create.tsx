@@ -15,12 +15,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Colors, Spacing, Radius } from "../../../constants/theme";
-import { createEvent, uploadBanner, uploadGuidebook } from "../../../services/panitia/events.service";
+import { createEvent, uploadBanner, uploadGuidebook, createCategory } from "../../../services/panitia/events.service";
 
 export default function CreateEventScreen() {
   const [name, setName] = useState("");
@@ -32,8 +32,33 @@ export default function CreateEventScreen() {
   const [guidebookName, setGuidebookName] = useState<string | null>(null);
   const [statusDraft, setStatusDraft] = useState(false); // false = ONGOING (aktif), true = DRAFT
 
+  interface CategoryInput {
+    name: string;
+    isTeam: boolean;
+    maxMember: number;
+    maxTotalTeams: string;
+  }
+  const [categories, setCategories] = useState<CategoryInput[]>([]);
+
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ name?: string; eventDate?: string; general?: string }>({});
+
+  useFocusEffect(
+    React.useCallback(() => {
+      // Reset form on mount/focus
+      setName("");
+      setEventDate("");
+      setDescription("");
+      setContactInfo("");
+      setBannerUri(null);
+      setGuidebookUri(null);
+      setGuidebookName(null);
+      setStatusDraft(false);
+      setCategories([]);
+      setErrors({});
+      setDateObj(new Date());
+    }, [])
+  );
 
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [dateObj, setDateObj] = useState(new Date());
@@ -118,6 +143,25 @@ export default function CreateEventScreen() {
           await uploadGuidebook(created.id, guidebookUri);
         } catch (e: any) {
           console.warn("Guidebook upload error:", e);
+        }
+      }
+
+      // Create categories
+      if (categories.length > 0 && created.id) {
+        for (const cat of categories) {
+          if (cat.name.trim()) {
+            try {
+              await createCategory(created.id, {
+                name: cat.name.trim(),
+                minMember: 1,
+                maxMember: cat.isTeam ? cat.maxMember : 1,
+                teamCompositionMode: "FREE",
+                maxTotalTeams: parseInt(cat.maxTotalTeams) || undefined,
+              });
+            } catch (e: any) {
+              console.warn("Category creation error:", e);
+            }
+          }
         }
       }
 
@@ -240,6 +284,93 @@ export default function CreateEventScreen() {
               onChangeText={setContactInfo}
             />
           </View>
+
+          {/* Cabang Lomba */}
+          <Text style={styles.label}>Cabang Lomba (Opsional)</Text>
+          {categories.map((cat, index) => (
+            <View key={index} style={styles.categoryInputCard}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <Text style={{ fontWeight: "700", color: "#1E1E1E" }}>Lomba {index + 1}</Text>
+                <TouchableOpacity onPress={() => setCategories(prev => prev.filter((_, i) => i !== index))}>
+                  <Ionicons name="trash-outline" size={18} color={Colors.primary} />
+                </TouchableOpacity>
+              </View>
+              <TextInput
+                style={[styles.input, { marginBottom: 8 }]}
+                placeholder="Nama Lomba (Contoh: Futsal)"
+                placeholderTextColor="#9E9E9E"
+                value={cat.name}
+                onChangeText={(t) => {
+                  const newCats = [...categories];
+                  newCats[index].name = t;
+                  setCategories(newCats);
+                }}
+              />
+              <View style={{ flexDirection: "row", gap: 8, marginBottom: 8 }}>
+                <TouchableOpacity
+                  style={[styles.statusBtn, !cat.isTeam ? styles.statusBtnActive : null, { paddingVertical: 8 }]}
+                  onPress={() => {
+                    const newCats = [...categories];
+                    newCats[index].isTeam = false;
+                    newCats[index].maxMember = 1;
+                    setCategories(newCats);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.statusBtnLabel, !cat.isTeam ? styles.statusBtnLabelActive : null]}>Individu</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.statusBtn, cat.isTeam ? styles.statusBtnActive : null, { paddingVertical: 8 }]}
+                  onPress={() => {
+                    const newCats = [...categories];
+                    newCats[index].isTeam = true;
+                    newCats[index].maxMember = 5;
+                    setCategories(newCats);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.statusBtnLabel, cat.isTeam ? styles.statusBtnLabelActive : null]}>Tim</Text>
+                </TouchableOpacity>
+              </View>
+              {cat.isTeam && (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <Text style={{ fontSize: 13, color: "#424242", width: 130 }}>Anggota per Tim:</Text>
+                  <TextInput
+                    style={[styles.input, { flex: 1, paddingVertical: 6 }]}
+                    keyboardType="number-pad"
+                    value={String(cat.maxMember)}
+                    onChangeText={(t) => {
+                      const newCats = [...categories];
+                      newCats[index].maxMember = parseInt(t) || 1;
+                      setCategories(newCats);
+                    }}
+                  />
+                </View>
+              )}
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Text style={{ fontSize: 13, color: "#424242", width: 130 }}>Maksimal Kuota:</Text>
+                <TextInput
+                  style={[styles.input, { flex: 1, paddingVertical: 6 }]}
+                  keyboardType="number-pad"
+                  placeholder="32"
+                  value={cat.maxTotalTeams}
+                  onChangeText={(t) => {
+                    const newCats = [...categories];
+                    newCats[index].maxTotalTeams = t;
+                    setCategories(newCats);
+                  }}
+                />
+              </View>
+            </View>
+          ))}
+          <TouchableOpacity
+            style={styles.addCategoryBtn}
+            onPress={() => setCategories(prev => [...prev, { name: "", isTeam: false, maxMember: 1, maxTotalTeams: "" }])}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="add" size={18} color={Colors.primary} />
+            <Text style={styles.addCategoryText}>Tambah Lomba</Text>
+          </TouchableOpacity>
 
           {/* Status Event */}
           <Text style={styles.label}>Status Event</Text>
@@ -414,7 +545,7 @@ const styles = StyleSheet.create({
   bottomBar: {
     padding: Spacing.base, backgroundColor: "#fff",
     borderTopWidth: 1, borderTopColor: "#F0F0F0",
-    paddingBottom: Platform.OS === "ios" ? 28 : Spacing.base,
+    paddingBottom: 0,
   },
   submitBtn: {
     backgroundColor: Colors.primary, borderRadius: Radius.lg,
@@ -422,4 +553,14 @@ const styles = StyleSheet.create({
   },
   submitBtnDisabled: { opacity: 0.6 },
   submitBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
+  categoryInputCard: {
+    backgroundColor: "#F8FAFC", borderRadius: Radius.lg, padding: Spacing.md,
+    borderWidth: 1, borderColor: "#E2E8F0", marginBottom: Spacing.sm,
+  },
+  addCategoryBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
+    padding: Spacing.md, borderRadius: Radius.lg, backgroundColor: "#FFF5F5",
+    borderWidth: 1, borderColor: "#FEE2E2", marginTop: 4,
+  },
+  addCategoryText: { fontSize: 14, fontWeight: "700", color: Colors.primary },
 });

@@ -24,9 +24,14 @@ import {
   AnnouncementItem,
 } from "../../services/panitia/announcements.service";
 import { formatDate } from "../../utils/date";
-import { getEvents, EventItem } from "../../services/panitia/events.service";
+import { getEvents, getManagedEventsForStudent, EventItem } from "../../services/panitia/events.service";
+import { useAuth } from "../../context/AuthContext";
 
 export default function AnnouncementsScreen() {
+  const { user } = useAuth();
+  const studentId = user?.student?.id;
+  const userId = user?.id;
+
   const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
   const [events, setEvents] = useState<EventItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,7 +52,7 @@ export default function AnnouncementsScreen() {
     try {
       const [annRes, evRes] = await Promise.allSettled([
         getAnnouncements(1, 50),
-        getEvents(1, 50),
+        getManagedEventsForStudent(studentId, userId),
       ]);
 
       if (annRes.status === "fulfilled") {

@@ -42,8 +42,12 @@ export default function EventsListScreen() {
   useFocusEffect(
     useCallback(() => {
       setLoading(true);
-      setSearch("");
       load();
+
+      // Membersihkan pencarian saat berpindah halaman (unfocus / blur)
+      return () => {
+        setSearch("");
+      };
     }, [load])
   );
 

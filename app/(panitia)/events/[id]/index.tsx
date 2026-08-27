@@ -105,6 +105,7 @@ function SwipeableBottomModal({
   const panResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, gs) => gs.dy > 10 && Math.abs(gs.dy) > Math.abs(gs.dx),
+      onMoveShouldSetPanResponderCapture: (_, gs) => gs.dy > 15 && Math.abs(gs.dy) > Math.abs(gs.dx),
       onPanResponderMove: (_, gs) => {
         if (gs.dy > 0) translateY.setValue(gs.dy);
       },
@@ -356,7 +357,7 @@ export default function EventDetailScreen() {
           <Ionicons name="alert-circle-outline" size={48} color={Colors.primary} />
           <Text style={styles.errorTitle}>Detail Event Tidak Ditemukan</Text>
           <Text style={styles.errorSub}>{error || "Event tidak ada atau telah dihapus."}</Text>
-          <TouchableOpacity style={styles.retryBtn} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.retryBtn} onPress={() => router.navigate("/(panitia)/events")}>
             <Text style={styles.retryText}>Kembali</Text>
           </TouchableOpacity>
         </View>
@@ -395,7 +396,7 @@ export default function EventDetailScreen() {
           )}
           <TouchableOpacity
             style={styles.backFab}
-            onPress={() => router.back()}
+            onPress={() => router.navigate("/(panitia)/events")}
             activeOpacity={0.8}
           >
             <Ionicons name="arrow-back" size={20} color="#fff" />

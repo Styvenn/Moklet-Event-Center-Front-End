@@ -67,16 +67,16 @@ export default function CategoryFormScreen() {
   }, [targetEventId, targetCatId]);
 
   // Auto-switch ke individu jika user pilih tim tapi maxMember = 1
-  useEffect(() => {
+  const handleMaxMemberBlur = () => {
     if (isTeam) {
-      const maxNum = parseInt(maxMember, 10);
-      if (!isNaN(maxNum) && maxNum <= 1) {
+      const num = parseInt(maxMember, 10);
+      if (!isNaN(num) && num <= 1) {
         setIsTeam(false);
         setMinMember("1");
         setMaxMember("1");
       }
     }
-  }, [maxMember, isTeam]);
+  };
 
   const validate = () => {
     const errs: typeof errors = {};
@@ -112,17 +112,29 @@ export default function CategoryFormScreen() {
     const minNum = isTeam ? parseInt(minMember, 10) : 1;
     const finalIsTeam = isTeam && maxNum > 1;
 
+    // Auto-correct state jika terlanjur disubmit
+    if (isTeam && maxNum <= 1) {
+      setIsTeam(false);
+      setMinMember("1");
+      setMaxMember("1");
+    }
+
+    const maxGroupVal =
+      (teamCompositionMode === "PER_CLASS" || teamCompositionMode === "PER_ANGKATAN") && maxTeamsPerGroup.trim()
+        ? parseInt(maxTeamsPerGroup, 10)
+        : undefined;
+
+    const maxTotalVal = maxTotalTeams.trim() ? parseInt(maxTotalTeams, 10) : undefined;
+
     const dto = {
       name: name.trim(),
       minMember: finalIsTeam ? minNum : 1,
       maxMember: finalIsTeam ? maxNum : 1,
       teamCompositionMode,
-      // Hanya kirim maxTeamsPerGroup jika mode membutuhkannya
-      maxTeamsPerGroup:
-        (teamCompositionMode === "PER_CLASS" || teamCompositionMode === "PER_ANGKATAN") && maxTeamsPerGroup.trim()
-          ? parseInt(maxTeamsPerGroup, 10)
-          : undefined,
-      maxTotalTeams: maxTotalTeams.trim() ? parseInt(maxTotalTeams, 10) : undefined,
+      maxTeamsPerGroup: maxGroupVal,
+      maxTeamPerGroup: maxGroupVal, // singular fallback
+      maxTotalTeams: maxTotalVal,
+      maxTotalTeam: maxTotalVal, // singular fallback
       excludeGrade12,
     };
 
@@ -136,8 +148,21 @@ export default function CategoryFormScreen() {
       Alert.alert("Sukses", `Cabang lomba berhasil ${isEdit ? "diperbarui" : "ditambahkan"}!`, [
         {
           text: "OK",
-          // Gunakan router.replace agar tidak stack-up halaman
-          onPress: () => router.replace({ pathname: "/(panitia)/events/[id]", params: { id: targetEventId } } as any),
+          onPress: () => {
+            if (isEdit) {
+              router.back();
+            } else {
+              // Clear form to stay on the page and allow adding more
+              setName("");
+              setIsTeam(false);
+              setMinMember("1");
+              setMaxMember("1");
+              setTeamCompositionMode("FREE");
+              setMaxTeamsPerGroup("");
+              setMaxTotalTeams("");
+              setExcludeGrade12(true);
+            }
+          },
         },
       ]);
     } catch (e: any) {
@@ -163,7 +188,7 @@ export default function CategoryFormScreen() {
       >
         <View style={styles.header}>
           <TouchableOpacity
-            onPress={() => router.replace({ pathname: "/(panitia)/events/[id]", params: { id: targetEventId } } as any)}
+            onPress={() => router.back()}
             style={styles.backBtn}
           >
             <Ionicons name="arrow-back" size={24} color="#1E1E1E" />
@@ -233,6 +258,7 @@ export default function CategoryFormScreen() {
                   keyboardType="numeric"
                   value={maxMember}
                   onChangeText={(t) => { setMaxMember(t); setErrors((e) => ({ ...e, members: undefined })); }}
+                  onBlur={handleMaxMemberBlur}
                 />
               </View>
             </View>

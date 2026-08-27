@@ -85,7 +85,7 @@ export default function ScheduleFormScreen() {
   };
 
   const goBackToEvent = () => {
-    router.replace({ pathname: "/(panitia)/events/[id]", params: { id: targetEventId } } as any);
+    router.back();
   };
 
   const handleSubmit = async () => {
