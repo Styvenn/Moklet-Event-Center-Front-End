@@ -215,11 +215,20 @@ api.interceptors.response.use(
       }
     }
 
-    const normalizedError: ApiErrorResponse = {
+    // Jika backend mengirim pesan validasi spesifik (misal dari class-validator / NestJS)
+    if (responseData?.message && typeof responseData.message === 'string' && responseData.message !== 'Internal server error') {
+      formattedMessage = responseData.message;
+    } else if (Array.isArray(responseData?.message)) {
+      formattedMessage = responseData.message.join('\n');
+    }
+
+    const normalizedError: ApiErrorResponse & { response?: any; data?: any } = {
       statusCode,
       message: rawMessage,
       error: responseData?.error || 'Error',
       formattedMessage,
+      response: error.response,
+      data: responseData,
     };
 
     return Promise.reject(normalizedError);

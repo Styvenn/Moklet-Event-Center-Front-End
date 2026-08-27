@@ -68,17 +68,42 @@ export async function getStudents(page = 1, limit = 50): Promise<PaginatedStuden
 }
 
 export async function createStudent(dto: CreateStudentDto): Promise<StudentItem> {
-  const res: any = await api.post('/students', dto);
-  return res?.data || res;
+  console.log('[DEBUG createStudent] Request Payload:', JSON.stringify(dto, null, 2));
+  try {
+    const res: any = await api.post('/students', dto);
+    console.log('[DEBUG createStudent] Response Success:', JSON.stringify(res, null, 2));
+    return res?.data || res;
+  } catch (error: any) {
+    console.error('====================================================');
+    console.error('[ERROR createStudent] Gagal menambahkan siswa:');
+    console.error('- HTTP Status:', error?.statusCode || error?.response?.status || 'N/A');
+    console.error('- Response Data:', JSON.stringify(error?.response?.data || error?.data || error?.message || error, null, 2));
+    console.error('- Formatted Error:', error?.formattedMessage || error?.message);
+    console.error('====================================================');
+    throw error;
+  }
 }
 
 export async function updateStudent(id: string, dto: UpdateStudentDto): Promise<StudentItem> {
-  const res: any = await api.patch(`/students/${id}`, dto);
-  return res?.data || res;
+  console.log(`[DEBUG updateStudent] ID: ${id}, Payload:`, JSON.stringify(dto, null, 2));
+  try {
+    const res: any = await api.patch(`/students/${id}`, dto);
+    return res?.data || res;
+  } catch (error: any) {
+    console.error(`[ERROR updateStudent] ID ${id}:`, error?.response?.data || error);
+    throw error;
+  }
 }
 
 export async function deleteStudent(id: string): Promise<void> {
-  await api.delete(`/students/${id}`);
+  console.log(`[DEBUG deleteStudent] Deleting student ID: ${id}`);
+  try {
+    await api.delete(`/students/${id}`);
+    console.log(`[DEBUG deleteStudent] Successfully deleted student ID: ${id}`);
+  } catch (error: any) {
+    console.error(`[ERROR deleteStudent] ID ${id}:`, error?.response?.data || error);
+    throw error;
+  }
 }
 
 /**
