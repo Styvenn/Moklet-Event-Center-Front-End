@@ -8,7 +8,7 @@ import {
   Platform,
   ActivityIndicator,
 } from "react-native";
-import { Tabs, router } from "expo-router";
+import { Tabs, Redirect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Colors } from "../../constants/theme";
@@ -107,8 +107,7 @@ function PanitiaGuard({ children }: { children: React.ReactNode }) {
     );
   }
   if (!user || (user.role !== "PANITIA" && user.role !== "SISWA" && user.role !== "ADMIN_KESISWAAN")) {
-    router.replace("/login");
-    return null;
+    return <Redirect href="/login" />;
   }
   return <>{children}</>;
 }

@@ -1,9 +1,17 @@
 ﻿// app/(panitia)/history.tsx
 import React, { useState, useCallback } from "react";
 import {
-  View, Text, StyleSheet, SafeAreaView, Platform, FlatList,
-  TouchableOpacity, ActivityIndicator, RefreshControl, Image,
-} from "react-native";
+  View,
+  Text,
+  StyleSheet,
+  Platform,
+  FlatList,
+  TouchableOpacity,
+  ActivityIndicator,
+  RefreshControl,
+  Image,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import { Colors, Spacing, Radius } from "../../constants/theme";

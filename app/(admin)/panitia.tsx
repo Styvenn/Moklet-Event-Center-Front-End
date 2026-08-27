@@ -1,12 +1,12 @@
 // app/(admin)/panitia.tsx
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   Platform,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   FlatList,
   TextInput,
   ActivityIndicator,
@@ -14,9 +14,9 @@ import {
   KeyboardAvoidingView,
   RefreshControl,
   Alert,
-  PanResponder,
   Animated,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius } from '../../constants/theme';
@@ -28,6 +28,7 @@ import {
   PanitiaItem,
 } from '../../services/admin/panitia.service';
 import { getErrorMessage } from '../../services/api';
+import { useDragToClose } from '../../components/useDragToClose';
 
 // ─── Avatar Color Helper ───────────────────────────────────────────────────────
 
@@ -40,51 +41,6 @@ function getAvatarColor(identifier: string) {
   }
   const idx = Math.abs(hash) % AVATAR_COLORS.length;
   return AVATAR_COLORS[idx];
-}
-
-// ─── Hook: Drag To Close ───────────────────────────────────────────────────────
-
-const DRAG_DISMISS_THRESHOLD = 80;
-const DRAG_MAX_OPACITY = 300;
-
-function useDragToClose(onClose: () => void) {
-  const translateY = useRef(new Animated.Value(0)).current;
-
-  const overlayOpacity = translateY.interpolate({
-    inputRange: [0, DRAG_MAX_OPACITY],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 2,
-      onPanResponderMove: (_, gs) => {
-        if (gs.dy > 0) translateY.setValue(gs.dy);
-      },
-      onPanResponderRelease: (_, gs) => {
-        if (gs.dy > DRAG_DISMISS_THRESHOLD) {
-          Animated.timing(translateY, {
-            toValue: 700,
-            duration: 200,
-            useNativeDriver: true,
-          }).start(() => {
-            translateY.setValue(0);
-            onClose();
-          });
-        } else {
-          Animated.spring(translateY, {
-            toValue: 0,
-            useNativeDriver: true,
-            bounciness: 4,
-          }).start();
-        }
-      },
-    })
-  ).current;
-
-  return { translateY, overlayOpacity, panResponder };
 }
 
 // ─── Modal Buat Akun Panitia ──────────────────────────────────────────────────
@@ -120,15 +76,15 @@ function CreatePanitiaModal({ visible, onClose, onSuccess }: CreatePanitiaModalP
   const handleSubmit = async () => {
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
-      setError('Email wajib diisi.');
+      setError('Email panitia wajib diisi.');
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
-      setError('Format email tidak valid.');
+      setError('Format email tidak valid (contoh: panitia@moklet.sch.id).');
       return;
     }
     if (!password.trim() || password.length < 8) {
-      setError('Password minimal 8 karakter (persyaratan server).');
+      setError('Password minimal harus 8 karakter.');
       return;
     }
 
@@ -158,7 +114,9 @@ function CreatePanitiaModal({ visible, onClose, onSuccess }: CreatePanitiaModalP
       statusBarTranslucent
       onRequestClose={handleClose}
     >
-      <Animated.View style={[ms.overlay, { opacity: overlayOpacity }]} />
+      <TouchableWithoutFeedback onPress={handleClose}>
+        <Animated.View style={[ms.overlay, { opacity: overlayOpacity }]} />
+      </TouchableWithoutFeedback>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={ms.sheetContainer}

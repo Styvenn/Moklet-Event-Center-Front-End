@@ -1,7 +1,7 @@
 // app/(admin)/_layout.tsx
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, ActivityIndicator } from 'react-native';
-import { Tabs, router } from 'expo-router';
+import { Tabs, Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/theme';
@@ -53,7 +53,7 @@ function AdminTabBar({ state, descriptors, navigation }: any) {
   );
 }
 
-/** Route Guard: redirect non-admin users keluar dari stack admin. */
+/** Route Guard: redirect non-admin users keluar dari stack admin secara deklaratif. */
 function AdminGuard({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
 
@@ -66,9 +66,7 @@ function AdminGuard({ children }: { children: React.ReactNode }) {
   }
 
   if (!user || user.role !== 'ADMIN_KESISWAAN') {
-    // Redirect ke login
-    router.replace('/login');
-    return null;
+    return <Redirect href="/login" />;
   }
 
   return <>{children}</>;

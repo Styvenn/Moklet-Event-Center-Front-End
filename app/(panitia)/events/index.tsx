@@ -4,7 +4,6 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   Platform,
   FlatList,
   TouchableOpacity,
@@ -12,7 +11,8 @@ import {
   RefreshControl,
   Image,
   TextInput,
-} from "react-native";
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import { Colors, Spacing, Radius } from "../../../constants/theme";

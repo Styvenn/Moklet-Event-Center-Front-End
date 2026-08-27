@@ -3,7 +3,7 @@ import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
-export const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://mecbiru.up.railway.app';
+export const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://mecbirutelkom.up.railway.app';
 const TOKEN_KEY = 'mec_auth_token';
 
 // Helper storage aman untuk Web & Mobile Native
@@ -164,7 +164,7 @@ api.interceptors.response.use(
   },
   (error) => {
     const responseData = error.response?.data;
-    const statusCode = error.response?.status || responseData?.statusCode || 500;
+    const statusCode = error.response?.status || responseData?.statusCode || (error.response ? 500 : 0);
     const rawMessage = responseData?.message || error.message || 'Terjadi kesalahan pada server';
 
     let formattedMessage = '';
@@ -176,9 +176,12 @@ api.interceptors.response.use(
       formattedMessage = String(rawMessage);
     }
 
-    // Terjemahkan error umum backend (Prisma / NestJS / HTTP) ke bahasa yang jelas bagi admin
     const lowerMsg = formattedMessage.toLowerCase();
-    if (statusCode === 500) {
+
+    // Penanganan Network / Offline Error
+    if (!error.response || statusCode === 0 || lowerMsg.includes('network error') || lowerMsg.includes('timeout') || lowerMsg.includes('econnrefused')) {
+      formattedMessage = 'Tidak dapat terhubung ke server. Pastikan koneksi internet aktif dan server dapat diakses.';
+    } else if (statusCode === 500) {
       if (lowerMsg.includes('p2002') || lowerMsg.includes('unique constraint') || lowerMsg.includes('duplicate')) {
         formattedMessage = 'Data sudah terdaftar di sistem (duplikat). Periksa kembali data yang dimasukkan.';
       } else if (
@@ -196,8 +199,20 @@ api.interceptors.response.use(
       if (lowerMsg.includes('already exists') || lowerMsg.includes('sudah ada')) {
         formattedMessage = 'Data tersebut sudah ada di sistem.';
       }
+    } else if (statusCode === 401) {
+      if (lowerMsg === 'unauthorized' || !rawMessage) {
+        formattedMessage = 'Email atau password salah. Silakan periksa kembali.';
+      }
+    } else if (statusCode === 403) {
+      if (lowerMsg === 'forbidden' || !rawMessage) {
+        formattedMessage = 'Akses ditolak. Akun Anda tidak memiliki izin untuk melakukan tindakan ini.';
+      }
     } else if (statusCode === 404) {
-      formattedMessage = 'Data atau layanan yang diminta tidak ditemukan di server.';
+      if (lowerMsg.includes('application not found')) {
+        formattedMessage = 'Server backend di Railway sedang tidak aktif atau URL server tidak ditemukan.';
+      } else if (!rawMessage || lowerMsg === 'not found' || lowerMsg.startsWith('cannot post') || lowerMsg.startsWith('cannot get')) {
+        formattedMessage = 'Layanan atau data yang diminta tidak ditemukan di server.';
+      }
     }
 
     const normalizedError: ApiErrorResponse = {

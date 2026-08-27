@@ -28,7 +28,6 @@ export default function RootLayout() {
         <Stack.Screen name="daftar-lomba" />
         <Stack.Screen name="room-tim" />
         <Stack.Screen name="arsip-pengumuman" />
-        <Stack.Screen name="profile" />
       </Stack>
     </AuthProvider>
   );
