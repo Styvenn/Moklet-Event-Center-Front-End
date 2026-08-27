@@ -8,6 +8,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { Colors, Spacing, Radius } from "../../../constants/theme";
 import { createEvent, uploadBanner, uploadGuidebook } from "../../../services/panitia/events.service";
 
@@ -15,12 +16,27 @@ export default function CreateEventScreen() {
   const [name, setName] = useState("");
   const [eventDate, setEventDate] = useState("");
   const [description, setDescription] = useState("");
+  const [contactInfo, setContactInfo] = useState("");
   const [bannerUri, setBannerUri] = useState<string | null>(null);
   const [guidebookUri, setGuidebookUri] = useState<string | null>(null);
   const [guidebookName, setGuidebookName] = useState<string | null>(null);
+  const [statusDraft, setStatusDraft] = useState(false); // false = ONGOING (aktif), true = DRAFT
 
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ name?: string; eventDate?: string; general?: string }>({});
+
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [dateObj, setDateObj] = useState(new Date());
+
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    setShowDatePicker(Platform.OS === "ios");
+    if (selectedDate) {
+      setDateObj(selectedDate);
+      const isoString = selectedDate.toISOString().split("T")[0];
+      setEventDate(isoString);
+      setErrors((e) => ({ ...e, eventDate: undefined }));
+    }
+  };
 
   const pickBanner = async () => {
     try {
@@ -55,7 +71,7 @@ export default function CreateEventScreen() {
     const errs: typeof errors = {};
     if (!name.trim()) errs.name = "Nama event wajib diisi.";
     if (!eventDate.trim()) {
-      errs.eventDate = "Tanggal event wajib diisi (YYYY-MM-DD).";
+      errs.eventDate = "Tanggal event wajib diisi.";
     } else if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate.trim())) {
       errs.eventDate = "Format tanggal harus YYYY-MM-DD (contoh: 2026-08-17).";
     }
@@ -73,7 +89,9 @@ export default function CreateEventScreen() {
         name: name.trim(),
         eventDate: eventDate.trim(),
         description: description.trim() || undefined,
-      });
+        contactInfo: contactInfo.trim() || undefined,
+        status: statusDraft ? "DRAFT" : "ONGOING",
+      } as any);
 
       // Upload banner jika ada
       if (bannerUri && created.id) {
@@ -94,8 +112,22 @@ export default function CreateEventScreen() {
       }
 
       setLoading(false);
+      // Reset form
+      setName("");
+      setEventDate("");
+      setDescription("");
+      setContactInfo("");
+      setBannerUri(null);
+      setGuidebookUri(null);
+      setGuidebookName(null);
+      setStatusDraft(false);
+
       Alert.alert("Sukses", "Event baru berhasil dibuat!", [
-        { text: "OK", onPress: () => router.replace({ pathname: "/(panitia)/events/[id]", params: { id: created.id } } as any) }
+        {
+          text: "OK",
+          onPress: () =>
+            router.replace({ pathname: "/(panitia)/events/[id]", params: { id: created.id } } as any),
+        },
       ]);
     } catch (e: any) {
       setLoading(false);
@@ -142,18 +174,32 @@ export default function CreateEventScreen() {
           />
           {errors.name && <Text style={styles.errHint}>{errors.name}</Text>}
 
-          {/* Tanggal Event */}
-          <Text style={styles.label}>Tanggal Event (YYYY-MM-DD) *</Text>
+          {/* Tanggal Event dengan Calendar Picker */}
+          <Text style={styles.label}>Tanggal Event *</Text>
           <View style={styles.dateInputWrapper}>
             <TextInput
               style={[styles.input, { flex: 1 }, errors.eventDate ? styles.inputError : null]}
-              placeholder="YYYY-MM-DD (Contoh: 2026-08-17)"
+              placeholder="Contoh: 2026-08-17"
               placeholderTextColor="#9E9E9E"
               value={eventDate}
               onChangeText={(t) => { setEventDate(t); setErrors((e) => ({ ...e, eventDate: undefined })); }}
             />
-            <Ionicons name="calendar-outline" size={20} color="#9E9E9E" style={{ marginLeft: -36, marginRight: 12 }} />
+            <TouchableOpacity
+              onPress={() => setShowDatePicker(true)}
+              style={styles.calendarBtn}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="calendar-outline" size={20} color={Colors.primary} />
+            </TouchableOpacity>
           </View>
+          {showDatePicker && (
+            <DateTimePicker
+              value={dateObj}
+              mode="date"
+              display={Platform.OS === "ios" ? "spinner" : "calendar"}
+              onChange={onDateChange}
+            />
+          )}
           {errors.eventDate && <Text style={styles.errHint}>{errors.eventDate}</Text>}
 
           {/* Deskripsi */}
@@ -168,6 +214,58 @@ export default function CreateEventScreen() {
             value={description}
             onChangeText={setDescription}
           />
+
+          {/* Kontak Panitia */}
+          <Text style={styles.label}>Nomor Kontak Panitia (Opsional)</Text>
+          <View style={styles.contactRow}>
+            <View style={styles.contactIconCircle}>
+              <Ionicons name="call-outline" size={18} color={Colors.primary} />
+            </View>
+            <TextInput
+              style={[styles.input, { flex: 1 }]}
+              placeholder="Contoh: 08123456789 (WhatsApp Panitia)"
+              placeholderTextColor="#9E9E9E"
+              keyboardType="phone-pad"
+              value={contactInfo}
+              onChangeText={setContactInfo}
+            />
+          </View>
+
+          {/* Status Event */}
+          <Text style={styles.label}>Status Event</Text>
+          <View style={styles.statusToggleRow}>
+            <TouchableOpacity
+              style={[styles.statusBtn, !statusDraft ? styles.statusBtnActive : null]}
+              onPress={() => setStatusDraft(false)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="play-circle-outline" size={18} color={!statusDraft ? "#fff" : "#757575"} />
+              <View>
+                <Text style={[styles.statusBtnLabel, !statusDraft ? styles.statusBtnLabelActive : null]}>
+                  Aktif (Ongoing)
+                </Text>
+                <Text style={[styles.statusBtnSub, !statusDraft ? { color: "rgba(255,255,255,0.8)" } : null]}>
+                  Langsung dipublikasikan
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.statusBtn, statusDraft ? styles.statusBtnDraft : null]}
+              onPress={() => setStatusDraft(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="document-outline" size={18} color={statusDraft ? "#B45309" : "#757575"} />
+              <View>
+                <Text style={[styles.statusBtnLabel, statusDraft ? styles.statusBtnLabelDraft : null]}>
+                  Draft
+                </Text>
+                <Text style={[styles.statusBtnSub, statusDraft ? { color: "#92400E" } : null]}>
+                  Simpan dulu, belum tampil
+                </Text>
+              </View>
+            </TouchableOpacity>
+          </View>
 
           {/* Upload Banner */}
           <Text style={styles.label}>Banner Event</Text>
@@ -215,7 +313,9 @@ export default function CreateEventScreen() {
             {loading ? (
               <ActivityIndicator color="#fff" size="small" />
             ) : (
-              <Text style={styles.submitBtnText}>Simpan Event</Text>
+              <Text style={styles.submitBtnText}>
+                {statusDraft ? "Simpan sebagai Draft" : "Simpan & Publikasikan Event"}
+              </Text>
             )}
           </TouchableOpacity>
         </View>
@@ -247,8 +347,33 @@ const styles = StyleSheet.create({
   },
   inputError: { borderColor: Colors.primary, backgroundColor: "#FFF8F8" },
   errHint: { fontSize: 12, color: Colors.primary, marginTop: 4, marginLeft: 4 },
-  dateInputWrapper: { flexDirection: "row", alignItems: "center" },
+  dateInputWrapper: { flexDirection: "row", alignItems: "center", gap: 8 },
+  calendarBtn: {
+    width: 44, height: 44, borderRadius: Radius.lg, backgroundColor: "#FEE2E2",
+    alignItems: "center", justifyContent: "center",
+  },
   textArea: { minHeight: 100, paddingTop: 12 },
+  contactRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  contactIconCircle: {
+    width: 44, height: 44, borderRadius: 22, backgroundColor: "#FEE2E2",
+    alignItems: "center", justifyContent: "center",
+  },
+  // Status Toggle
+  statusToggleRow: { flexDirection: "row", gap: 10 },
+  statusBtn: {
+    flex: 1, flexDirection: "row", alignItems: "center", gap: 8,
+    paddingVertical: 12, paddingHorizontal: Spacing.md, borderRadius: Radius.lg,
+    backgroundColor: "#F5F5F5", borderWidth: 1.5, borderColor: "transparent",
+  },
+  statusBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  statusBtnDraft: {
+    backgroundColor: "#FEF3C7", borderColor: "#F59E0B",
+  },
+  statusBtnLabel: { fontSize: 12, fontWeight: "700", color: "#757575" },
+  statusBtnLabelActive: { color: "#fff" },
+  statusBtnLabelDraft: { color: "#B45309" },
+  statusBtnSub: { fontSize: 10, color: "#9E9E9E", marginTop: 1 },
+  // Upload
   uploadCard: {
     borderWidth: 1.5, borderColor: "#E0E0E0", borderStyle: "dashed",
     borderRadius: Radius.xl, overflow: "hidden", backgroundColor: "#FAFAFA",

@@ -8,8 +8,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, router } from "expo-router";
 import { Colors, Spacing, Radius } from "../../../../constants/theme";
 import {
-  createSchedule, updateSchedule, getSchedulesByEvent, ScheduleItem,
+  createSchedule, updateSchedule, getSchedulesByEvent,
 } from "../../../../services/panitia/events.service";
+import DateTimePicker from "@react-native-community/datetimepicker";
 
 export default function ScheduleFormScreen() {
   const { eventId, scheduleId } = useLocalSearchParams<{ eventId: string; scheduleId?: string }>();
@@ -21,6 +22,9 @@ export default function ScheduleFormScreen() {
   const [dayLabel, setDayLabel] = useState("");
   const [date, setDate] = useState("");
   const [dresscodeText, setDresscodeText] = useState("");
+
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [dateObj, setDateObj] = useState(new Date());
 
   const [fetching, setFetching] = useState(isEdit);
   const [loading, setLoading] = useState(false);
@@ -36,6 +40,9 @@ export default function ScheduleFormScreen() {
           setDayLabel(existing.dayLabel);
           setDate(existing.date);
           setDresscodeText(existing.dresscodeText);
+          // Sync dateObj
+          const parsed = new Date(existing.date);
+          if (!isNaN(parsed.getTime())) setDateObj(parsed);
         }
       } catch {
         setErrors({ general: "Gagal memuat detail jadwal." });
@@ -45,6 +52,16 @@ export default function ScheduleFormScreen() {
     }
     load();
   }, [targetEventId, targetSchId]);
+
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    setShowDatePicker(Platform.OS === "ios");
+    if (selectedDate) {
+      setDateObj(selectedDate);
+      const isoString = selectedDate.toISOString().split("T")[0];
+      setDate(isoString);
+      setErrors((e) => ({ ...e, date: undefined }));
+    }
+  };
 
   const validate = () => {
     const errs: typeof errors = {};
@@ -56,6 +73,10 @@ export default function ScheduleFormScreen() {
     }
     setErrors(errs);
     return Object.keys(errs).length === 0;
+  };
+
+  const goBackToEvent = () => {
+    router.replace({ pathname: "/(panitia)/events/[id]", params: { id: targetEventId } } as any);
   };
 
   const handleSubmit = async () => {
@@ -76,9 +97,17 @@ export default function ScheduleFormScreen() {
         await createSchedule(targetEventId, dto);
       }
       setLoading(false);
-      Alert.alert("Sukses", `Jadwal kegiatan berhasil ${isEdit ? "diperbarui" : "ditambahkan"}!`, [
-        { text: "OK", onPress: () => router.back() }
-      ]);
+      Alert.alert(
+        "Sukses",
+        `Jadwal kegiatan berhasil ${isEdit ? "diperbarui" : "ditambahkan"}!`,
+        [
+          {
+            text: "OK",
+            // Gunakan replace agar tidak stack halaman — kembali ke detail event
+            onPress: goBackToEvent,
+          },
+        ]
+      );
     } catch (e: any) {
       setLoading(false);
       setErrors({ general: e?.formattedMessage || e?.message || "Gagal menyimpan jadwal." });
@@ -101,7 +130,7 @@ export default function ScheduleFormScreen() {
         style={{ flex: 1 }}
       >
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <TouchableOpacity onPress={goBackToEvent} style={styles.backBtn}>
             <Ionicons name="arrow-back" size={24} color="#1E1E1E" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{isEdit ? "Edit Jadwal" : "Tambah Jadwal Baru"}</Text>
@@ -131,15 +160,32 @@ export default function ScheduleFormScreen() {
           />
           {errors.dayLabel && <Text style={styles.errHint}>{errors.dayLabel}</Text>}
 
-          {/* Tanggal */}
-          <Text style={styles.label}>Tanggal Kegiatan (YYYY-MM-DD) *</Text>
-          <TextInput
-            style={[styles.input, errors.date ? styles.inputError : null]}
-            placeholder="Contoh: 2026-08-17"
-            placeholderTextColor="#9E9E9E"
-            value={date}
-            onChangeText={(t) => { setDate(t); setErrors((e) => ({ ...e, date: undefined })); }}
-          />
+          {/* Tanggal dengan Calendar Picker */}
+          <Text style={styles.label}>Tanggal Kegiatan *</Text>
+          <View style={styles.dateInputWrapper}>
+            <TextInput
+              style={[styles.input, { flex: 1 }, errors.date ? styles.inputError : null]}
+              placeholder="Contoh: 2026-08-17"
+              placeholderTextColor="#9E9E9E"
+              value={date}
+              onChangeText={(t) => { setDate(t); setErrors((e) => ({ ...e, date: undefined })); }}
+            />
+            <TouchableOpacity
+              onPress={() => setShowDatePicker(true)}
+              style={styles.calendarBtn}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="calendar-outline" size={20} color={Colors.primary} />
+            </TouchableOpacity>
+          </View>
+          {showDatePicker && (
+            <DateTimePicker
+              value={dateObj}
+              mode="date"
+              display={Platform.OS === "ios" ? "spinner" : "calendar"}
+              onChange={onDateChange}
+            />
+          )}
           {errors.date && <Text style={styles.errHint}>{errors.date}</Text>}
 
           {/* Catatan / Dresscode */}
@@ -180,7 +226,10 @@ const styles = StyleSheet.create({
   backBtn: { width: 38, height: 38, alignItems: "center", justifyContent: "center" },
   headerTitle: { fontSize: 18, fontWeight: "800", color: "#1E1E1E" },
   scroll: { padding: Spacing.base, paddingBottom: 40 },
-  errorBox: { flexDirection: "row", gap: 8, backgroundColor: "#FFEBEE", borderRadius: Radius.lg, padding: Spacing.md, marginBottom: Spacing.base },
+  errorBox: {
+    flexDirection: "row", gap: 8, backgroundColor: "#FFEBEE", borderRadius: Radius.lg,
+    padding: Spacing.md, marginBottom: Spacing.base, alignItems: "center",
+  },
   errorText: { flex: 1, fontSize: 13, color: Colors.primary },
   label: { fontSize: 13, fontWeight: "600", color: "#424242", marginTop: Spacing.md, marginBottom: 6 },
   input: {
@@ -189,6 +238,11 @@ const styles = StyleSheet.create({
   },
   inputError: { borderColor: Colors.primary, backgroundColor: "#FFF8F8" },
   errHint: { fontSize: 12, color: Colors.primary, marginTop: 4 },
+  dateInputWrapper: { flexDirection: "row", alignItems: "center", gap: 8 },
+  calendarBtn: {
+    width: 44, height: 44, borderRadius: Radius.lg, backgroundColor: "#FEE2E2",
+    alignItems: "center", justifyContent: "center",
+  },
   textArea: { minHeight: 90, paddingTop: 12 },
   bottomBar: {
     padding: Spacing.base, backgroundColor: "#fff", borderTopWidth: 1, borderTopColor: "#F0F0F0",
