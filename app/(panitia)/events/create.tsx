@@ -169,6 +169,7 @@ export default function CreateEventScreen() {
         }
       }
 
+
       // Sinkronkan cache: list event panitia + layar siswa langsung ter-update.
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.managedEvents }),

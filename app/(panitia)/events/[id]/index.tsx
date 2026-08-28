@@ -337,21 +337,18 @@ export default function EventDetailScreen() {
 
   if (error || !event) {
     return (
-      <SafeAreaView style={styles.safe}>
+      <><SafeAreaView style={styles.safe}>
         <View style={styles.centered}>
           <Ionicons name="alert-circle-outline" size={48} color={Colors.primary} />
           <Text style={styles.errorTitle}>Detail Event Tidak Ditemukan</Text>
           <Text style={styles.errorSub}>{error || "Event tidak ada atau telah dihapus."}</Text>
-<<<<<<< HEAD
-    <TouchableOpacity style={styles.retryBtn} onPress={() => router.navigate("/(panitia)/events")}>
-      <Text style={styles.retryText}>Kembali</Text>
-=======
-          <TouchableOpacity style={styles.retryBtn} onPress={() => refetch()}>
-        <Text style={styles.retryText}>Coba Lagi</Text>
->>>>>>> fc6931297a78dd7a7dcb914815e5ffb915d50b65
-      </TouchableOpacity>
-    </View>
-      </SafeAreaView >
+          <TouchableOpacity style={styles.retryBtn} onPress={() => router.navigate("/(panitia)/events")}>
+            <Text style={styles.retryText}>Kembali</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView><TouchableOpacity style={styles.retryBtn} onPress={() => refetch()}>
+          <Text style={styles.retryText}>Coba Lagi</Text>
+        </TouchableOpacity></>
     );
   }
 

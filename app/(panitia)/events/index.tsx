@@ -1,5 +1,5 @@
 // app/(panitia)/events/index.tsx
-import React, { useState, useCallback } from "react";
+import React, { useCallback, useState } from "react";
 import {
   View,
   Text,
@@ -31,6 +31,7 @@ export default function EventsListScreen() {
     queryFn: () => getEvents(1, 50),
   });
 
+
   useFocusEffect(
     useCallback(() => {
       // Membersihkan pencarian saat berpindah halaman (unfocus / blur)
@@ -39,6 +40,7 @@ export default function EventsListScreen() {
       };
     }, [])
   );
+
 
   const loadError = error ? 'Gagal memuat event. Tarik untuk mencoba ulang.' : '';
 

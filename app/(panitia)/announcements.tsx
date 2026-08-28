@@ -32,6 +32,7 @@ import { getManagedEventsForStudent, getEvents, EventItem } from "../../services
 import { useAuth } from "../../context/AuthContext";
 
 export default function AnnouncementsScreen() {
+
   const { user } = useAuth();
   const studentId = user?.student?.id;
   const userId = user?.id;
@@ -83,8 +84,8 @@ export default function AnnouncementsScreen() {
   const loadError = error
     ? "Gagal memuat pengumuman. Tarik untuk mencoba lagi."
     : data?.annError
-    ? "Gagal memuat pengumuman. Tarik untuk mencoba lagi."
-    : "";
+      ? "Gagal memuat pengumuman. Tarik untuk mencoba lagi."
+      : "";
 
   const onRefresh = () => refetch();
 
@@ -175,7 +176,7 @@ export default function AnnouncementsScreen() {
           <Text style={styles.eventBadgeText}>{item.eventName}</Text>
         </View>
       ) : (
-        <View style={[styles.eventBadge, { backgroundColor: "#E3F2FD" }]}> 
+        <View style={[styles.eventBadge, { backgroundColor: "#E3F2FD" }]}>
           <Ionicons name="globe-outline" size={12} color="#1565C0" />
           <Text style={[styles.eventBadgeText, { color: "#1565C0" }]}>Global</Text>
         </View>
@@ -196,9 +197,8 @@ export default function AnnouncementsScreen() {
       </View>
 
       {isLoading ? (
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={Colors.primary} />
-        </View>
+        <View style={styles.centered}><ActivityIndicator size="large" color={Colors.primary} /></View>
+
       ) : loadError ? (
         <View style={styles.centered}>
           <Ionicons name="alert-circle-outline" size={48} color="#BDBDBD" />
