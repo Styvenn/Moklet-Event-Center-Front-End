@@ -102,11 +102,14 @@ function AddStudentModal({ visible, classes, onClose, onSuccess }: AddStudentMod
     setLoading(true);
     setError('');
     try {
+      console.log('[AddStudentModal] Submitting student payload:', { name: cleanName, nis: cleanNis, classId: selectedClassId });
       await createStudent({ name: cleanName, nis: cleanNis, classId: selectedClassId });
       reset();
       onSuccess();
     } catch (e: any) {
-      setError(getErrorMessage(e, 'Gagal menambah siswa. Pastikan NIS belum terdaftar di sistem.'));
+      console.error('[AddStudentModal] Error response received:', e?.response?.data || e);
+      const specificError = getErrorMessage(e, 'Gagal menambah siswa. Pastikan NIS belum terdaftar di sistem.');
+      setError(specificError);
     } finally {
       setLoading(false);
     }
@@ -214,7 +217,12 @@ function AddStudentModal({ visible, classes, onClose, onSuccess }: AddStudentMod
               </View>
             )}
 
-            {error ? <Text style={ms.errorText}>{error}</Text> : null}
+            {error ? (
+              <View style={ms.errorBox}>
+                <Ionicons name="alert-circle-outline" size={18} color={Colors.primary} />
+                <Text style={ms.errorText}>{error}</Text>
+              </View>
+            ) : null}
           </ScrollView>
 
           {/* Submit */}
@@ -812,11 +820,22 @@ const ms = StyleSheet.create({
   classOptionActive: { backgroundColor: Colors.primaryLight },
   classOptionText: { fontSize: 14, color: '#424242' },
   classOptionTextActive: { color: Colors.primary, fontWeight: '600' },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FFEBEE',
+    padding: Spacing.md,
+    borderRadius: Radius.md,
+    marginTop: Spacing.md,
+    borderWidth: 1,
+    borderColor: '#FFCDD2',
+  },
   errorText: {
+    flex: 1,
     color: Colors.primary,
     fontSize: 13,
-    marginTop: Spacing.md,
-    textAlign: 'center',
+    fontWeight: '600',
   },
   submitBtn: {
     backgroundColor: Colors.primary,
