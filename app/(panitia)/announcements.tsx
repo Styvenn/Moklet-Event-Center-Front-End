@@ -1,5 +1,5 @@
 // app/(panitia)/announcements.tsx
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -17,14 +17,18 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect } from "expo-router";
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Colors, Spacing, Radius } from "../../constants/theme";
+import { cacheTime, queryKeys } from '../../constants/query';
 import {
-  getAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement,
+  getAnnouncements,
+  createAnnouncement,
+  updateAnnouncement,
+  deleteAnnouncement,
   AnnouncementItem,
 } from "../../services/panitia/announcements.service";
 import { formatDate } from "../../utils/date";
-import { getEvents, getManagedEventsForStudent, EventItem } from "../../services/panitia/events.service";
+import { getManagedEventsForStudent, getEvents, EventItem } from "../../services/panitia/events.service";
 import { useAuth } from "../../context/AuthContext";
 
 export default function AnnouncementsScreen() {
@@ -32,11 +36,40 @@ export default function AnnouncementsScreen() {
   const studentId = user?.student?.id;
   const userId = user?.id;
 
-  const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
-  const [events, setEvents] = useState<EventItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState("");
+  const queryClient = useQueryClient();
+
+  const {
+    data,
+    isLoading,
+    isRefetching,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: queryKeys.announcementsList,
+    staleTime: cacheTime.warm,
+    queryFn: async () => {
+      const [annRes, evRes] = await Promise.allSettled([
+        getAnnouncements(1, 50),
+        getEvents(1, 50),
+      ]);
+
+      return {
+        announcements: annRes.status === 'fulfilled' ? annRes.value.data : [],
+        events: evRes.status === 'fulfilled' ? evRes.value : [],
+        annError: annRes.status !== 'fulfilled',
+      };
+    },
+  });
+
+  const announcements = data?.announcements || [];
+  const events = data?.events || [];
+
+  const invalidateAnnouncementData = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.announcementsList }),
+      queryClient.invalidateQueries({ queryKey: ['home'] }),
+    ]);
+  };
 
   // Modal State
   const [showModal, setShowModal] = useState(false);
@@ -47,33 +80,13 @@ export default function AnnouncementsScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [modalError, setModalError] = useState("");
 
-  const loadData = useCallback(async () => {
-    setError("");
-    try {
-      const [annRes, evRes] = await Promise.allSettled([
-        getAnnouncements(1, 50),
-        getManagedEventsForStudent(studentId, userId),
-      ]);
+  const loadError = error
+    ? "Gagal memuat pengumuman. Tarik untuk mencoba lagi."
+    : data?.annError
+    ? "Gagal memuat pengumuman. Tarik untuk mencoba lagi."
+    : "";
 
-      if (annRes.status === "fulfilled") {
-        setAnnouncements(annRes.value.data);
-      } else {
-        setError("Gagal memuat pengumuman. Tarik untuk mencoba lagi.");
-      }
-
-      if (evRes.status === "fulfilled") {
-        setEvents(evRes.value);
-      }
-    } catch {
-      setError("Gagal memuat data pengumuman.");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
-
-  useFocusEffect(useCallback(() => { setLoading(true); loadData(); }, [loadData]));
-  const onRefresh = () => { setRefreshing(true); loadData(); };
+  const onRefresh = () => refetch();
 
   const openCreateModal = () => {
     setEditId(null);
@@ -97,11 +110,12 @@ export default function AnnouncementsScreen() {
     Alert.alert("Hapus Pengumuman", `Apakah kamu yakin ingin menghapus "${itemTitle}"?`, [
       { text: "Batal", style: "cancel" },
       {
-        text: "Hapus", style: "destructive",
+        text: "Hapus",
+        style: "destructive",
         onPress: async () => {
           try {
             await deleteAnnouncement(id);
-            setAnnouncements((prev) => prev.filter((a) => a.id !== id));
+            await invalidateAnnouncementData();
           } catch (e: any) {
             Alert.alert("Gagal", e?.formattedMessage || "Gagal menghapus pengumuman.");
           }
@@ -128,7 +142,7 @@ export default function AnnouncementsScreen() {
         });
       }
       setShowModal(false);
-      loadData();
+      await invalidateAnnouncementData();
     } catch (e: any) {
       setModalError(e?.formattedMessage || e?.message || "Gagal menyimpan pengumuman.");
     } finally {
@@ -161,7 +175,7 @@ export default function AnnouncementsScreen() {
           <Text style={styles.eventBadgeText}>{item.eventName}</Text>
         </View>
       ) : (
-        <View style={[styles.eventBadge, { backgroundColor: "#E3F2FD" }]}>
+        <View style={[styles.eventBadge, { backgroundColor: "#E3F2FD" }]}> 
           <Ionicons name="globe-outline" size={12} color="#1565C0" />
           <Text style={[styles.eventBadgeText, { color: "#1565C0" }]}>Global</Text>
         </View>
@@ -181,14 +195,16 @@ export default function AnnouncementsScreen() {
         </TouchableOpacity>
       </View>
 
-      {loading ? (
-        <View style={styles.centered}><ActivityIndicator size="large" color={Colors.primary} /></View>
-      ) : error ? (
+      {isLoading ? (
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+      ) : loadError ? (
         <View style={styles.centered}>
           <Ionicons name="alert-circle-outline" size={48} color="#BDBDBD" />
           <Text style={styles.errorTitle}>Gagal Memuat</Text>
-          <Text style={styles.errorSub}>{error}</Text>
-          <TouchableOpacity style={styles.retryBtn} onPress={() => { setLoading(true); loadData(); }}>
+          <Text style={styles.errorSub}>{loadError}</Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={() => refetch()}>
             <Text style={styles.retryText}>Coba Lagi</Text>
           </TouchableOpacity>
         </View>
@@ -198,7 +214,7 @@ export default function AnnouncementsScreen() {
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           contentContainerStyle={styles.list}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
+          refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={onRefresh} colors={[Colors.primary]} />}
           ListEmptyComponent={
             <View style={styles.centered}>
               <Ionicons name="megaphone-outline" size={52} color="#BDBDBD" />

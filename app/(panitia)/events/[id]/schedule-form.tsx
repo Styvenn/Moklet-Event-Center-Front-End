@@ -16,12 +16,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, router } from "expo-router";
 import { Colors, Spacing, Radius } from "../../../../constants/theme";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "../../../../constants/query";
 import {
   createSchedule, updateSchedule, getSchedulesByEvent,
 } from "../../../../services/panitia/events.service";
 import DateTimePicker from "@react-native-community/datetimepicker";
 
 export default function ScheduleFormScreen() {
+  const queryClient = useQueryClient();
   const { eventId, scheduleId } = useLocalSearchParams<{ eventId: string; scheduleId?: string }>();
   const targetEventId = Array.isArray(eventId) ? eventId[0] : eventId;
   const targetSchId = Array.isArray(scheduleId) ? scheduleId[0] : scheduleId;
@@ -105,6 +108,13 @@ export default function ScheduleFormScreen() {
       } else {
         await createSchedule(targetEventId, dto);
       }
+
+      // Sinkronkan cache: detail event panitia & siswa ter-update.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.panitiaEventDetail(targetEventId) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.eventDetail(targetEventId) }),
+      ]);
+
       setLoading(false);
       Alert.alert(
         "Sukses",

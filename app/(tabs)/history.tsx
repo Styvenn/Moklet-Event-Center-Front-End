@@ -1,5 +1,5 @@
 // app/(tabs)/history.tsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
 import { Colors, Spacing, Radius } from '../../constants/theme';
+import { cacheTime, queryKeys } from '../../constants/query';
 import {
   getRegistrationHistory,
   RegistrationHistoryItem,
@@ -28,31 +30,18 @@ function shortenName(name: string | null): string {
 }
 
 export default function HistoryScreen() {
-  const [historyList, setHistoryList] = useState<RegistrationHistoryItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const { data: historyList = [], isLoading, isRefetching, error, refetch } = useQuery<
+    RegistrationHistoryItem[]
+  >({
+    queryKey: queryKeys.registrationHistory,
+    staleTime: cacheTime.warm,
+    queryFn: getRegistrationHistory,
+  });
 
-  const fetchHistory = useCallback(async (isRefresh = false) => {
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
-    setErrorMsg(null);
-
-    try {
-      const data = await getRegistrationHistory();
-      setHistoryList(data);
-    } catch (err: any) {
-      console.warn('Error loading registration history:', err);
-      setErrorMsg(err?.formattedMessage || 'Gagal memuat riwayat pendaftaran. Tarik ke bawah untuk mencoba lagi.');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchHistory();
-  }, [fetchHistory]);
+  const errorMsg = error
+    ? (error as any)?.formattedMessage ||
+      'Gagal memuat riwayat pendaftaran. Tarik ke bawah untuk mencoba lagi.'
+    : null;
 
   const handleCardPress = (item: RegistrationHistoryItem) => {
     if (item.teamId) {
@@ -69,7 +58,7 @@ export default function HistoryScreen() {
       </View>
 
       <FlatList
-        data={loading ? [] : historyList}
+        data={isLoading ? [] : historyList}
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.list}
@@ -119,13 +108,13 @@ export default function HistoryScreen() {
             <Ionicons name="alert-circle-outline" size={18} color={Colors.error} />
             <Text style={styles.errorText}>{errorMsg}</Text>
           </View>
-        ) : loading ? (
+        ) : isLoading ? (
           <View style={styles.centerBox}>
             <ActivityIndicator size="large" color={Colors.primary} />
             <Text style={styles.loadingText}>Memuat riwayat pendaftaran...</Text>
           </View>
         ) : null}
-        ListEmptyComponent={!loading && !errorMsg ? (
+        ListEmptyComponent={!isLoading && !errorMsg ? (
           <View style={styles.emptyContainer}>
             <View style={styles.emptyIconBox}>
               <Ionicons name="receipt-outline" size={48} color={Colors.textPlaceholder} />
@@ -136,8 +125,8 @@ export default function HistoryScreen() {
         ) : null}
         refreshControl={
           <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => fetchHistory(true)}
+            refreshing={isRefetching}
+            onRefresh={refetch}
             colors={[Colors.primary]}
           />
         }

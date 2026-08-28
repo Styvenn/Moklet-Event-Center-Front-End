@@ -220,7 +220,6 @@ export default function RegisterScreen() {
             ) : (
               <View style={styles.buttonInner}>
                 <Text style={styles.primaryButtonText}>Kirim OTP</Text>
-                <Ionicons name="arrow-forward" size={18} color={Colors.white} style={{ marginLeft: 8 }} />
               </View>
             )}
           </TouchableOpacity>

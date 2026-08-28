@@ -17,11 +17,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, router } from "expo-router";
 import { Colors, Spacing, Radius } from "../../../../constants/theme";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "../../../../constants/query";
 import {
   createCategory, updateCategory, getCategoriesByEvent, CategoryItem,
 } from "../../../../services/panitia/events.service";
 
 export default function CategoryFormScreen() {
+  const queryClient = useQueryClient();
   const { eventId, categoryId } = useLocalSearchParams<{ eventId: string; categoryId?: string }>();
   const targetEventId = Array.isArray(eventId) ? eventId[0] : eventId;
   const targetCatId = Array.isArray(categoryId) ? categoryId[0] : categoryId;
@@ -144,6 +147,16 @@ export default function CategoryFormScreen() {
       } else {
         await createCategory(targetEventId, dto);
       }
+
+      // Sinkronkan cache: detail event & layar siswa ter-update.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.panitiaEventDetail(targetEventId) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.eventCategories(targetEventId) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.eventDetail(targetEventId) }),
+        queryClient.invalidateQueries({ queryKey: ['events'] }),
+        queryClient.invalidateQueries({ queryKey: ['home'] }),
+      ]);
+
       setLoading(false);
       Alert.alert("Sukses", `Cabang lomba berhasil ${isEdit ? "diperbarui" : "ditambahkan"}!`, [
         {

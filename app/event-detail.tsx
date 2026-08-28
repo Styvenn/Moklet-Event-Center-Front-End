@@ -1,5 +1,5 @@
 // app/event-detail.tsx
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -10,12 +10,15 @@ import {
   ActivityIndicator,
   Linking,
   Alert,
+  RefreshControl,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
 import { Colors, Spacing, Radius } from '../constants/theme';
+import { cacheTime, queryKeys } from '../constants/query';
 import api from '../services/api';
 import { formatDate } from '../utils/date';
 
@@ -34,34 +37,22 @@ export interface EventDetail {
 
 export default function EventDetailScreen() {
   const { eventId } = useLocalSearchParams<{ eventId?: string }>();
-  const [event, setEvent] = useState<EventDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function fetchEventDetail() {
-      if (!eventId) {
-        setErrorMsg('ID Event tidak ditemukan');
-        setLoading(false);
-        return;
-      }
+  const { data: event, isLoading, isRefetching, error, refetch } = useQuery<EventDetail>({
+    queryKey: queryKeys.eventDetail(eventId),
+    enabled: !!eventId,
+    staleTime: cacheTime.cold,
+    queryFn: async () => {
+      const res: any = await api.get(`/events/${eventId}`);
+      return res?.data || res;
+    },
+  });
 
-      setLoading(true);
-      setErrorMsg(null);
-      try {
-        const res: any = await api.get(`/events/${eventId}`);
-        const eventData = res?.data || res;
-        setEvent(eventData);
-      } catch (err: any) {
-        console.warn('Error fetching event detail:', err);
-        setErrorMsg('Gagal memuat detail event dari server.');
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchEventDetail();
-  }, [eventId]);
+  const errorMsg = !eventId
+    ? 'ID Event tidak ditemukan'
+    : error
+      ? 'Gagal memuat detail event dari server.'
+      : null;
 
   const handleDownloadGuidebook = () => {
     if (event?.guidebookUrl) {
@@ -73,7 +64,7 @@ export default function EventDetailScreen() {
     }
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
@@ -105,8 +96,8 @@ export default function EventDetailScreen() {
           <Ionicons name="alert-circle-outline" size={48} color={Colors.error} />
           <Text style={styles.errorTextTitle}>Terjadi Kesalahan</Text>
           <Text style={styles.errorTextSub}>{errorMsg || 'Event tidak ditemukan'}</Text>
-          <TouchableOpacity style={styles.retryBtn} onPress={() => router.back()}>
-            <Text style={styles.retryBtnText}>Kembali</Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={() => refetch()}>
+            <Text style={styles.retryBtnText}>Coba Lagi</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -133,6 +124,13 @@ export default function EventDetailScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 100 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefetching}
+            onRefresh={refetch}
+            colors={[Colors.primary]}
+          />
+        }
       >
         {/* 1. Banner */}
         {event.bannerUrl ? (

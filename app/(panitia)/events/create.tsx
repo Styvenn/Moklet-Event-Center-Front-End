@@ -16,6 +16,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "../../../constants/query";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -23,6 +25,7 @@ import { Colors, Spacing, Radius } from "../../../constants/theme";
 import { createEvent, uploadBanner, uploadGuidebook, createCategory } from "../../../services/panitia/events.service";
 
 export default function CreateEventScreen() {
+  const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [eventDate, setEventDate] = useState("");
   const [description, setDescription] = useState("");
@@ -146,6 +149,7 @@ export default function CreateEventScreen() {
         }
       }
 
+
       // Create categories
       if (categories.length > 0 && created.id) {
         for (const cat of categories) {
@@ -164,6 +168,14 @@ export default function CreateEventScreen() {
           }
         }
       }
+
+      // Sinkronkan cache: list event panitia + layar siswa langsung ter-update.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.managedEvents }),
+        queryClient.invalidateQueries({ queryKey: ['events'] }),
+        queryClient.invalidateQueries({ queryKey: ['home'] }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.adminStats }),
+      ]);
 
       setLoading(false);
       // Reset form

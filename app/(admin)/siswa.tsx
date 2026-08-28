@@ -18,9 +18,10 @@ import {
   Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from 'expo-router';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius } from '../../constants/theme';
+import { cacheTime, queryKeys } from '../../constants/query';
 import {
   getStudents,
   createStudent,
@@ -395,46 +396,42 @@ function UploadExcelModal({ visible, onClose, onSuccess }: UploadExcelModalProps
 // ─── Main Screen ───────────────────────────────────────────────────────────────
 
 export default function SiswaScreen() {
-  const [students, setStudents] = useState<StudentItem[]>([]);
-  const [totalFromServer, setTotalFromServer] = useState(0);
-  const [classes, setClasses] = useState<ClassItem[]>([]);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
 
-  const fetchAll = useCallback(async () => {
-    const [studentsResult, classesResult] = await Promise.allSettled([
-      getStudents(1, 100),
-      getClasses(),
+  const { data, isLoading, isRefetching, refetch } = useQuery({
+    queryKey: queryKeys.adminStudents,
+    staleTime: cacheTime.warm,
+    queryFn: async () => {
+      const [studentsResult, classesResult] = await Promise.allSettled([
+        getStudents(1, 100),
+        getClasses(),
+      ]);
+
+      return {
+        students:
+          studentsResult.status === 'fulfilled' ? studentsResult.value.data : [],
+        totalFromServer:
+          studentsResult.status === 'fulfilled' ? studentsResult.value.meta.total : 0,
+        classes: classesResult.status === 'fulfilled' ? classesResult.value : [],
+      };
+    },
+  });
+
+  const students = data?.students || [];
+  const classes = data?.classes || [];
+  const totalFromServer = data?.totalFromServer ?? 0;
+
+  const invalidateStudentData = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.adminStudents }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.adminStats }),
     ]);
+  };
 
-    if (studentsResult.status === 'fulfilled') {
-      setStudents(studentsResult.value.data);
-      // Gunakan meta.total dari server sebagai angka resmi
-      setTotalFromServer(studentsResult.value.meta.total);
-    } else {
-      console.warn('Gagal memuat data siswa:', studentsResult.reason);
-    }
-
-    if (classesResult.status === 'fulfilled') {
-      setClasses(classesResult.value);
-    } else {
-      console.warn('Gagal memuat data kelas:', classesResult.reason);
-    }
-
-    setLoading(false);
-    setRefreshing(false);
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      fetchAll();
-    }, [fetchAll])
-  );
-
-  const onRefresh = () => { setRefreshing(true); fetchAll(); };
+  const onRefresh = () => refetch();
 
   // Client-side search filter
   const filtered = students.filter((s) => {
@@ -458,8 +455,7 @@ export default function SiswaScreen() {
           onPress: async () => {
             try {
               await deleteStudent(student.id);
-              setStudents((prev) => prev.filter((s) => s.id !== student.id));
-              setTotalFromServer((prev) => Math.max(0, prev - 1));
+              await invalidateStudentData();
             } catch (e: any) {
               Alert.alert('Gagal', getErrorMessage(e, 'Tidak dapat menghapus data siswa.'));
             }
@@ -538,7 +534,7 @@ export default function SiswaScreen() {
           : `${totalFromServer} siswa terdaftar`}
       </Text>
 
-      {loading ? (
+      {isLoading ? (
         <View style={styles.loaderContainer}>
           <ActivityIndicator size="large" color={Colors.primary} />
           <Text style={styles.loaderText}>Memuat data siswa...</Text>
@@ -558,7 +554,7 @@ export default function SiswaScreen() {
             </View>
           }
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />
+            <RefreshControl refreshing={isRefetching} onRefresh={onRefresh} colors={[Colors.primary]} />
           }
         />
       )}
@@ -570,7 +566,7 @@ export default function SiswaScreen() {
         onClose={() => setShowAddModal(false)}
         onSuccess={() => {
           setShowAddModal(false);
-          fetchAll();
+          invalidateStudentData();
         }}
       />
       <UploadExcelModal
@@ -578,7 +574,7 @@ export default function SiswaScreen() {
         onClose={() => setShowUploadModal(false)}
         onSuccess={() => {
           setShowUploadModal(false);
-          fetchAll();
+          invalidateStudentData();
         }}
       />
     </SafeAreaView>

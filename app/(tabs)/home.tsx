@@ -1,5 +1,5 @@
 // app/(tabs)/home.tsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -16,8 +16,10 @@ import {
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { router, useFocusEffect } from 'expo-router';
+import { router } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
 import { Colors, Spacing, Radius } from '../../constants/theme';
+import { cacheTime, queryKeys } from '../../constants/query';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 import { formatDate } from '../../utils/date';
@@ -74,54 +76,49 @@ export default function HomeScreen() {
     ? `${user.student.class.grade} ${user.student.class.name}`
     : user?.role || 'Siswa';
 
-  const [managedEvents, setManagedEvents] = useState<EventItem[]>([]);
-  const [generalEvents, setGeneralEvents] = useState<EventItem[]>([]);
-  const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
-  const isCommittee = managedEvents.length > 0;
-
-  const loadData = useCallback(async () => {
-    try {
+  const {
+    data: homeData,
+    isLoading,
+    isRefetching,
+    refetch,
+  } = useQuery({
+    queryKey: queryKeys.home(user?.student?.id, user?.id),
+    staleTime: cacheTime.warm,
+    queryFn: async () => {
       const [managedRes, eventsRes, annRes] = await Promise.allSettled([
         getManagedEventsForStudent(user?.student?.id, user?.id),
         api.get('/events?limit=5'),
         getAnnouncements(1, 4),
       ]);
 
-      if (managedRes.status === 'fulfilled') {
-        setManagedEvents(managedRes.value);
-      }
-
+      const managed: EventItem[] =
+        managedRes.status === 'fulfilled' ? managedRes.value : [];
+      let general: EventItem[] = [];
       if (eventsRes.status === 'fulfilled') {
         const raw = eventsRes.value;
-        const list = Array.isArray(raw) ? raw : (raw as any)?.data || [];
-        setGeneralEvents(list);
+        general = Array.isArray(raw) ? raw : (raw as any)?.data || [];
       }
+      const annList: AnnouncementItem[] =
+        annRes.status === 'fulfilled' ? annRes.value.data : [];
 
-      if (annRes.status === 'fulfilled') {
-        setAnnouncements(annRes.value.data);
-      }
-    } catch (err) {
-      console.warn('Error fetching home data:', err);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [user?.student?.id, user?.id]);
+      return {
+        managedEvents: managed,
+        generalEvents: general,
+        announcements: annList,
+      };
+    },
+  });
 
-  useFocusEffect(
-    useCallback(() => {
-      setLoading(true);
-      loadData();
-    }, [loadData])
-  );
+  const managedEvents = homeData?.managedEvents || [];
+  const generalEvents = homeData?.generalEvents || [];
+  const announcements = homeData?.announcements || [];
+
+  const isCommittee = managedEvents.length > 0;
 
   const onRefresh = () => {
-    setRefreshing(true);
-    loadData();
+    refetch();
   };
 
   const handleLogout = async () => {
@@ -165,13 +162,13 @@ export default function HomeScreen() {
             showsVerticalScrollIndicator={false}
             refreshControl={
               <RefreshControl
-                refreshing={refreshing}
+                refreshing={isRefetching}
                 onRefresh={onRefresh}
                 colors={[Colors.primary]}
               />
             }
           >
-            {loading ? (
+            {isLoading && !homeData ? (
               <View style={styles.loaderBox}>
                 <ActivityIndicator size="large" color={Colors.primary} />
               </View>
@@ -312,7 +309,7 @@ export default function HomeScreen() {
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
-              refreshing={refreshing}
+              refreshing={isRefetching}
               onRefresh={onRefresh}
               colors={[Colors.primary]}
             />
@@ -352,7 +349,7 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
 
-          {loading ? (
+          {isLoading && !homeData ? (
             <View style={styles.loaderContainer}>
               <ActivityIndicator size="small" color={Colors.primary} />
               <Text style={styles.loaderText}>Memuat event...</Text>
