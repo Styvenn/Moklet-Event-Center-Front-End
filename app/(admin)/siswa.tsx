@@ -18,7 +18,7 @@ import {
   Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius } from '../../constants/theme';
 import { cacheTime, queryKeys } from '../../constants/query';
@@ -28,6 +28,7 @@ import {
   deleteStudent,
   importStudentsExcel,
   StudentItem,
+  CreateStudentDto,
 } from '../../services/admin/students.service';
 import { getClasses, ClassItem } from '../../services/admin/classes.service';
 import { getErrorMessage } from '../../services/api';
@@ -51,10 +52,10 @@ interface AddStudentModalProps {
 }
 
 function AddStudentModal({ visible, classes, onClose, onSuccess }: AddStudentModalProps) {
+  const queryClient = useQueryClient();
   const [name, setName] = useState('');
   const [nis, setNis] = useState('');
   const [selectedClassId, setSelectedClassId] = useState('');
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showClassPicker, setShowClassPicker] = useState(false);
 
@@ -74,6 +75,22 @@ function AddStudentModal({ visible, classes, onClose, onSuccess }: AddStudentMod
   const { translateY, overlayOpacity, panResponder } = useDragToClose(handleClose);
 
   const selectedClass = classes.find((c) => c.id === selectedClassId);
+
+  // TanStack Query Mutation untuk tambah siswa
+  const addStudentMutation = useMutation({
+    mutationFn: (dto: CreateStudentDto) => createStudent(dto),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.adminStudents });
+      queryClient.invalidateQueries({ queryKey: queryKeys.adminStats });
+      reset();
+      onSuccess();
+    },
+    onError: (e: any) => {
+      console.error('[AddStudentModal] Error response received:', e?.response?.data || e);
+      const specificError = getErrorMessage(e, 'Gagal menambah siswa. Pastikan NIS belum terdaftar di sistem.');
+      setError(specificError);
+    },
+  });
 
   const handleSubmit = async () => {
     const cleanName = name.trim();
@@ -100,21 +117,11 @@ function AddStudentModal({ visible, classes, onClose, onSuccess }: AddStudentMod
       return;
     }
 
-    setLoading(true);
     setError('');
-    try {
-      console.log('[AddStudentModal] Submitting student payload:', { name: cleanName, nis: cleanNis, classId: selectedClassId });
-      await createStudent({ name: cleanName, nis: cleanNis, classId: selectedClassId });
-      reset();
-      onSuccess();
-    } catch (e: any) {
-      console.error('[AddStudentModal] Error response received:', e?.response?.data || e);
-      const specificError = getErrorMessage(e, 'Gagal menambah siswa. Pastikan NIS belum terdaftar di sistem.');
-      setError(specificError);
-    } finally {
-      setLoading(false);
-    }
+    addStudentMutation.mutate({ name: cleanName, nis: cleanNis, classId: selectedClassId });
   };
+
+  const loading = addStudentMutation.isPending;
 
   return (
     <Modal

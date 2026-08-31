@@ -1,9 +1,10 @@
-// services/api.ts
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
-export const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/'; 
+// Backend berjalan di Railway — selalu gunakan URL production kecuali .env diisi secara eksplisit.
+export const API_URL = (process.env.EXPO_PUBLIC_API_URL || 'https://biruindonesiacreative.up.railway.app').replace(/\/+$/, '');
+console.log('[API Connection] Base URL configured to:', API_URL);
 const TOKEN_KEY = 'mec_auth_token';
 
 // Helper storage aman untuk Web & Mobile Native
