@@ -53,56 +53,6 @@ export const tokenStorage = {
   },
 };
 
-// Helper generic storage aman untuk Web & Mobile Native (JSON / Objects)
-export const appStorage = {
-  async getItem<T>(key: string, defaultValue: T): Promise<T> {
-    try {
-      let raw: string | null = null;
-      if (Platform.OS === 'web') {
-        if (typeof window !== 'undefined') {
-          raw = localStorage.getItem(key);
-        }
-      } else {
-        raw = await SecureStore.getItemAsync(key);
-      }
-      if (!raw) return defaultValue;
-      return JSON.parse(raw) as T;
-    } catch (e) {
-      console.warn(`Error reading key ${key} from storage:`, e);
-      return defaultValue;
-    }
-  },
-
-  async setItem<T>(key: string, value: T): Promise<void> {
-    try {
-      const raw = JSON.stringify(value);
-      if (Platform.OS === 'web') {
-        if (typeof window !== 'undefined') {
-          localStorage.setItem(key, raw);
-        }
-        return;
-      }
-      await SecureStore.setItemAsync(key, raw);
-    } catch (e) {
-      console.warn(`Error saving key ${key} to storage:`, e);
-    }
-  },
-
-  async removeItem(key: string): Promise<void> {
-    try {
-      if (Platform.OS === 'web') {
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem(key);
-        }
-        return;
-      }
-      await SecureStore.deleteItemAsync(key);
-    } catch (e) {
-      console.warn(`Error deleting key ${key} from storage:`, e);
-    }
-  },
-};
-
 export const api = axios.create({
   baseURL: API_URL,
   headers: {

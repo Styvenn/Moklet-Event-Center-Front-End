@@ -133,9 +133,7 @@ export interface CreateCategoryDto {
   name: string; minMember: number; maxMember: number;
   teamCompositionMode: 'FREE' | 'PER_CLASS' | 'PER_ANGKATAN';
   maxTeamsPerGroup?: number;
-  maxTeamPerGroup?: number; // singular fallback
   maxTotalTeams?: number;
-  maxTotalTeam?: number; // singular fallback
   excludeGrade12?: boolean;
 }
 export type UpdateCategoryDto = Partial<CreateCategoryDto>;

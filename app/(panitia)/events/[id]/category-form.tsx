@@ -135,9 +135,7 @@ export default function CategoryFormScreen() {
       maxMember: finalIsTeam ? maxNum : 1,
       teamCompositionMode,
       maxTeamsPerGroup: maxGroupVal,
-      maxTeamPerGroup: maxGroupVal, // singular fallback
       maxTotalTeams: maxTotalVal,
-      maxTotalTeam: maxTotalVal, // singular fallback
       excludeGrade12,
     };
 
