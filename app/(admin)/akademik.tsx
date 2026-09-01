@@ -23,7 +23,6 @@ import {
   getClasses,
   createClass,
   deleteClass,
-  hideClass,
   ClassItem,
   GradeOption,
 } from '../../services/admin/classes.service';
@@ -458,21 +457,9 @@ export default function AkademikScreen() {
               await deleteClass(cls.id);
               await invalidateAkademikData();
             } catch (e: any) {
-              // Jika server menolak penghapusan permanen karena riwayat arsip database
               Alert.alert(
-                'Arsip Siswa Terdeteksi di Server',
-                `Kelas "${cls.grade} — ${cls.name}" tidak dapat dihapus permanen dari server karena database masih menyimpan arsip riwayat data siswa yang pernah terdaftar di kelas ini.\n\nApakah Anda ingin menyembunyikan kelas ini dari daftar?`,
-                [
-                  { text: 'Batal', style: 'cancel' },
-                  {
-                    text: 'Sembunyikan Kelas',
-                    style: 'destructive',
-                    onPress: async () => {
-                      await hideClass(cls.id);
-                      await invalidateAkademikData();
-                    },
-                  },
-                ]
+                'Gagal Menghapus Kelas',
+                getErrorMessage(e, `Kelas "${cls.grade} — ${cls.name}" tidak dapat dihapus.`),
               );
             }
           },

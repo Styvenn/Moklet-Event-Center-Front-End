@@ -1,9 +1,5 @@
 // lib/react-query.ts
 import { QueryClient } from '@tanstack/react-query';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
-// Inisialisasi storage untuk async cache / persistence yang 100% kompatibel dengan Expo Go
-export const appStorage = AsyncStorage;
 
 export const queryClient = new QueryClient({
   defaultOptions: {
