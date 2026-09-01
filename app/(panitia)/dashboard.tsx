@@ -21,15 +21,12 @@ import { useQuery } from '@tanstack/react-query';
 import { Colors, Spacing, Radius } from "../../constants/theme";
 import { cacheTime, queryKeys } from '../../constants/query';
 import { useAuth } from "../../context/AuthContext";
+import PageHeader from "../../components/PageHeader";
 import { getEvents, EventItem } from "../../services/panitia/events.service";
 import { getPanitia } from "../../services/admin/panitia.service";
 
 export default function PanitiaDashboardScreen() {
-  const { user, logout } = useAuth();
-  const username =
-    user?.student?.name || user?.email?.split("@")[0] || "Panitia";
-  const avatarUrl = user?.student?.avatarUrl;
-
+  const { logout } = useAuth();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const { data, isLoading, isRefetching, error, refetch } = useQuery({
@@ -64,32 +61,7 @@ export default function PanitiaDashboardScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          {avatarUrl ? (
-            <Image source={avatarUrl} style={styles.avatarImg} cachePolicy="memory-disk" />
-          ) : (
-            <View style={styles.avatarCircle}>
-              <Text style={styles.avatarInitial}>
-                {username.charAt(0).toUpperCase()}
-              </Text>
-            </View>
-          )}
-          <View>
-            <Text style={styles.greetLabel}>Selamat datang,</Text>
-            <Text style={styles.greetName} numberOfLines={1}>
-              {username}
-            </Text>
-          </View>
-        </View>
-        <TouchableOpacity
-          style={styles.logoutBtn}
-          onPress={() => setShowLogoutModal(true)}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="log-out-outline" size={22} color={Colors.primary} />
-        </TouchableOpacity>
-      </View>
+      <PageHeader onLogout={() => setShowLogoutModal(true)} />
 
       <ScrollView
         contentContainerStyle={styles.scroll}
@@ -306,64 +278,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#F5F7FA",
     paddingTop: Platform.OS === "android" ? 36 : 0,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: "#FFFFFF",
-    paddingHorizontal: Spacing.base,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    flex: 1,
-  },
-  avatarImg: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-  },
-  avatarCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: Colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarInitial: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#FFFFFF",
-  },
-  greetLabel: {
-    fontSize: 11,
-    color: "#94A3B8",
-    fontWeight: "500",
-  },
-  greetName: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: "#0F172A",
-    maxWidth: 200,
-  },
-  logoutBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#FEE2E2",
-    alignItems: "center",
-    justifyContent: "center",
   },
   scroll: {
     padding: Spacing.base,

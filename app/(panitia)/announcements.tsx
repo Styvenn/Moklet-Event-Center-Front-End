@@ -231,6 +231,11 @@ export default function AnnouncementsScreen() {
           behavior={Platform.OS === "ios" ? "padding" : undefined}
           style={ms.overlay}
         >
+          <ScrollView
+            style={ms.sheetScroll}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={ms.sheetScrollContent}
+          >
           <View style={ms.sheet}>
             <View style={ms.handle} />
             <View style={ms.sheetHeader}>
@@ -303,6 +308,7 @@ export default function AnnouncementsScreen() {
               {submitting ? <ActivityIndicator color="#fff" /> : <Text style={ms.submitBtnText}>{editId ? "Simpan Perubahan" : "Publikasikan"}</Text>}
             </TouchableOpacity>
           </View>
+          </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
@@ -346,7 +352,9 @@ const styles = StyleSheet.create({
 
 const ms = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
-  sheet: { backgroundColor: "#fff", borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: Spacing.base },
+  sheetScroll: { maxHeight: "92%" },
+  sheetScrollContent: { flexGrow: 1, justifyContent: "flex-end" },
+  sheet: { backgroundColor: "#fff", borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: Spacing.base, paddingBottom: Platform.OS === "ios" ? 30 : 16 },
   handle: { width: 40, height: 4, backgroundColor: "#E0E0E0", borderRadius: 2, alignSelf: "center", marginBottom: Spacing.md },
   sheetHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.md },
   sheetTitle: { fontSize: 17, fontWeight: "700", color: "#1E1E1E" },

@@ -109,13 +109,6 @@ export default function EventsListScreen() {
     <SafeAreaView style={styles.safe}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => router.back()}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="arrow-back" size={22} color="#1E1E1E" />
-        </TouchableOpacity>
         <Text style={styles.headerTitle}>Semua Event</Text>
         <TouchableOpacity
           style={styles.addBtn}
@@ -208,16 +201,18 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#F0F0F0",
   },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#1E1E1E",
+    flex: 1,
+    textAlign: "left",
+  },
   backBtn: {
     width: 36,
     height: 36,
     alignItems: "center",
     justifyContent: "center",
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#B81414",
   },
   addBtn: {
     width: 34,

@@ -133,27 +133,29 @@ export default function HomeScreen() {
       {/* ─── CASE 1: SISWA IS A COMMITTEE MEMBER (DASHBOARD KOMITE EVENT - Screenshot 4) ─── */}
       {isCommittee ? (
         <>
-          {/* Header */}
+          {/* Header — disamakan dengan admin/dashboard.tsx */}
           <View style={styles.header}>
-            <View style={styles.headerProfile}>
+            <View style={styles.headerLeft}>
               {user?.student?.avatarUrl ? (
                 <Image source={user.student.avatarUrl} style={styles.avatarImg} cachePolicy="memory-disk" />
               ) : (
-                <View style={styles.avatarCircle}>
-                  <Text style={styles.avatarInitial}>{studentName.charAt(0).toUpperCase()}</Text>
+                <View style={styles.avatarBorder}>
+                  <View style={styles.avatarInner}>
+                    <Text style={styles.avatarInitial}>{studentName.charAt(0).toUpperCase()}</Text>
+                  </View>
                 </View>
               )}
-              <View style={styles.headerTextCol}>
-                <Text style={styles.headerBrand}>Moklet Event Center</Text>
-                <Text style={styles.headerSub}>Dashboard Komite event</Text>
+              <View>
+                <Text style={styles.greetLabel}>Selamat datang,</Text>
+                <Text style={styles.greetName} numberOfLines={1}>{studentName}</Text>
               </View>
             </View>
             <TouchableOpacity
               style={styles.logoutBtn}
-              activeOpacity={0.7}
+              activeOpacity={0.8}
               onPress={() => setShowLogoutModal(true)}
             >
-              <Ionicons name="log-out-outline" size={22} color="#78909C" />
+              <Ionicons name="log-out-outline" size={22} color={Colors.primary} />
             </TouchableOpacity>
           </View>
 
@@ -303,6 +305,33 @@ export default function HomeScreen() {
         </>
       ) : (
         /* ─── CASE 2: REGULAR SISWA (NOT A COMMITTEE MEMBER) ─── */
+        <>
+          {/* Header — disamakan dengan admin/dashboard.tsx */}
+          <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            {user?.student?.avatarUrl ? (
+              <Image source={user.student.avatarUrl} style={styles.avatarImg} cachePolicy="memory-disk" />
+            ) : (
+              <View style={styles.avatarBorder}>
+                <View style={styles.avatarInner}>
+                  <Text style={styles.avatarInitial}>{studentName.charAt(0).toUpperCase()}</Text>
+                </View>
+              </View>
+            )}
+            <View>
+              <Text style={styles.greetLabel}>Selamat datang,</Text>
+              <Text style={styles.greetName} numberOfLines={1}>{studentName}</Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={styles.logoutBtn}
+            activeOpacity={0.8}
+            onPress={() => setShowLogoutModal(true)}
+          >
+            <Ionicons name="log-out-outline" size={22} color={Colors.primary} />
+          </TouchableOpacity>
+        </View>
+
         <ScrollView
           style={styles.scrollContainer}
           contentContainerStyle={styles.scrollContent}
@@ -315,31 +344,6 @@ export default function HomeScreen() {
             />
           }
         >
-          {/* Top Profile Card Header */}
-          <View style={styles.profileCard}>
-            <View style={styles.avatarBorder}>
-              <View style={styles.avatarCircle}>
-                <Text style={styles.avatarInitial}>
-                  {studentName.charAt(0).toUpperCase()}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.profileTextContainer}>
-              <Text style={styles.profileName} numberOfLines={1}>
-                {studentName}
-              </Text>
-              <Text style={styles.profileSubtitle} numberOfLines={1}>
-                {classLabel}
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={styles.logoutIconButton}
-              activeOpacity={0.7}
-              onPress={() => setShowLogoutModal(true)}
-            >
-              <Ionicons name="exit-outline" size={24} color="#3D2723" />
-            </TouchableOpacity>
-          </View>
 
           {/* Event Banner Section */}
           <View style={styles.sectionHeader}>
@@ -438,6 +442,7 @@ export default function HomeScreen() {
             </View>
           )}
         </ScrollView>
+        </>
       )}
 
       {/* Logout Modal */}
@@ -481,53 +486,70 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'android' ? 36 : 0,
   },
   header: {
-    backgroundColor: '#fff',
-    paddingHorizontal: Spacing.base,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    paddingHorizontal: Spacing.base,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  headerProfile: {
+  headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    flex: 1,
   },
   avatarImg: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
   },
-  avatarCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.primaryLight,
+  avatarBorder: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 2,
+    borderColor: Colors.primary,
+    padding: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInner: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 16,
+    backgroundColor: '#FEE2E2',
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarInitial: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '800',
     color: Colors.primary,
   },
-  headerTextCol: {
-    gap: 2,
+  greetLabel: {
+    fontSize: 11,
+    color: '#94A3B8',
+    fontWeight: '500',
   },
-  headerBrand: {
-    fontSize: 16,
+  greetName: {
+    fontSize: 15,
     fontWeight: '800',
-    color: '#B81414',
-  },
-  headerSub: {
-    fontSize: 12,
-    color: '#757575',
+    color: '#0F172A',
+    maxWidth: 200,
   },
   logoutBtn: {
-    width: 36,
-    height: 36,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FEE2E2',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -733,30 +755,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  // Regular Siswa Styles
+  // Regular Siswa Styles — header sudah di atas, styles lama profileCard dihapus
   scrollContainer: { flex: 1 },
   scrollContent: { padding: Spacing.base, paddingBottom: 40 },
-  profileCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: Radius.xl,
-    padding: Spacing.base,
-    marginBottom: Spacing.base,
-    gap: Spacing.md,
-    elevation: 1,
-  },
-  avatarBorder: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    overflow: 'hidden',
-  },
-  avatarImage: { width: '100%', height: '100%' },
-  profileTextContainer: { flex: 1 },
-  profileName: { fontSize: 16, fontWeight: '800', color: '#1E1E1E' },
-  profileSubtitle: { fontSize: 12, color: '#757575', marginTop: 2 },
-  logoutIconButton: { padding: 6 },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
