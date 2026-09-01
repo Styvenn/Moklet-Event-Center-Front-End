@@ -264,6 +264,7 @@ export default function CreateEventScreen() {
               value={dateObj}
               mode="date"
               display={Platform.OS === "ios" ? "spinner" : "calendar"}
+              accentColor={Colors.primary}
               onChange={onDateChange}
             />
           )}
