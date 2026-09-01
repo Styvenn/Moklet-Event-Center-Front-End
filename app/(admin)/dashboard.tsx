@@ -20,6 +20,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Colors, Spacing, Radius } from '../../constants/theme';
 import { cacheTime, queryKeys } from '../../constants/query';
 import { useAuth } from '../../context/AuthContext';
+import PageHeader from '../../components/PageHeader';
 import { getStudents } from '../../services/admin/students.service';
 import { getPanitia } from '../../services/admin/panitia.service';
 import api from '../../services/api';
@@ -31,10 +32,7 @@ interface DashboardStats {
 }
 
 export default function AdminDashboardScreen() {
-  const { user, logout } = useAuth();
-  const adminName = user?.student?.name || user?.email?.split('@')[0] || 'Admin';
-  const avatarUrl = user?.student?.avatarUrl;
-
+  const { logout } = useAuth();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   // Warm cache: ringkasan stats tampil instan saat admin bolak-balik halaman.
@@ -84,32 +82,7 @@ export default function AdminDashboardScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          {avatarUrl ? (
-            <Image source={avatarUrl} style={styles.avatarImg} cachePolicy="memory-disk" />
-          ) : (
-            <View style={styles.avatarBorder}>
-              <View style={styles.avatarInner}>
-                <Text style={styles.avatarInitial}>
-                  {adminName.charAt(0).toUpperCase()}
-                </Text>
-              </View>
-            </View>
-          )}
-          <View>
-            <Text style={styles.greetLabel}>Selamat datang,</Text>
-            <Text style={styles.greetName} numberOfLines={1}>{adminName}</Text>
-          </View>
-        </View>
-        <TouchableOpacity
-          style={styles.logoutBtn}
-          onPress={() => setShowLogoutModal(true)}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="log-out-outline" size={22} color={Colors.primary} />
-        </TouchableOpacity>
-      </View>
+      <PageHeader onLogout={() => setShowLogoutModal(true)} />
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
@@ -242,74 +215,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F5F7FA',
     paddingTop: Platform.OS === 'android' ? 36 : 0,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#fff',
-    paddingHorizontal: Spacing.base,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-  },
-  avatarImg: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-  },
-  avatarBorder: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    borderWidth: 2,
-    borderColor: Colors.primary,
-    padding: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarInner: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 16,
-    backgroundColor: '#FEE2E2',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarInitial: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: Colors.primary,
-  },
-  greetLabel: {
-    fontSize: 11,
-    color: '#94A3B8',
-    fontWeight: '500',
-  },
-  greetName: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#0F172A',
-    maxWidth: 200,
-  },
-  logoutBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#FEE2E2',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   scrollContent: {
     padding: Spacing.base,
