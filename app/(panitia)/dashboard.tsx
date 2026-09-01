@@ -69,10 +69,12 @@ export default function PanitiaDashboardScreen() {
           {avatarUrl ? (
             <Image source={avatarUrl} style={styles.avatarImg} cachePolicy="memory-disk" />
           ) : (
-            <View style={styles.avatarCircle}>
-              <Text style={styles.avatarInitial}>
-                {username.charAt(0).toUpperCase()}
-              </Text>
+            <View style={styles.avatarBorder}>
+              <View style={styles.avatarInner}>
+                <Text style={styles.avatarInitial}>
+                  {username.charAt(0).toUpperCase()}
+                </Text>
+              </View>
             </View>
           )}
           <View>
@@ -333,18 +335,28 @@ const styles = StyleSheet.create({
     height: 42,
     borderRadius: 21,
   },
-  avatarCircle: {
+  avatarBorder: {
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: Colors.primary,
+    borderWidth: 2,
+    borderColor: Colors.primary,
+    padding: 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarInner: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 16,
+    backgroundColor: "#FEE2E2",
     alignItems: "center",
     justifyContent: "center",
   },
   avatarInitial: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "800",
-    color: "#FFFFFF",
+    color: Colors.primary,
   },
   greetLabel: {
     fontSize: 11,

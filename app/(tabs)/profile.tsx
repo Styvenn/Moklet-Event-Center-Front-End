@@ -30,14 +30,38 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      {/* Header — disamakan dengan admin/dashboard.tsx */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          {avatarUrl ? (
+            <Image source={avatarUrl} style={styles.headerAvatarImg} cachePolicy="memory-disk" />
+          ) : (
+            <View style={styles.headerAvatarBorder}>
+              <View style={styles.headerAvatarInner}>
+                <Text style={styles.headerAvatarInitial}>{username.charAt(0).toUpperCase()}</Text>
+              </View>
+            </View>
+          )}
+          <View>
+            <Text style={styles.greetLabel}>Selamat datang,</Text>
+            <Text style={styles.greetName} numberOfLines={1}>{username}</Text>
+          </View>
+        </View>
+        <TouchableOpacity style={styles.logoutBtn} activeOpacity={0.8} onPress={() => setShowLogoutModal(true)}>
+          <Ionicons name="log-out-outline" size={22} color={Colors.primary} />
+        </TouchableOpacity>
+      </View>
+
       <View style={styles.container}>
-        {/* Center Avatar & Info (Image 2) */}
+        {/* Center Avatar & Info */}
         <View style={styles.profileHeader}>
           {avatarUrl ? (
             <Image source={avatarUrl} style={styles.avatarImg} cachePolicy="memory-disk" />
           ) : (
             <View style={styles.avatarCircle}>
-              <Ionicons name="person" size={54} color="#FFFFFF" />
+              <View style={styles.avatarInner}>
+                <Ionicons name="person" size={48} color={Colors.primary} />
+              </View>
             </View>
           )}
           <Text style={styles.profileName}>{username}</Text>
@@ -124,17 +148,86 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F5F7FA',
     paddingTop: Platform.OS === 'android' ? 36 : 0,
+  },
+  // Header — identik admin/dashboard.tsx
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    paddingHorizontal: Spacing.base,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  headerAvatarImg: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+  },
+  headerAvatarBorder: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 2,
+    borderColor: Colors.primary,
+    padding: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerAvatarInner: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 16,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerAvatarInitial: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: Colors.primary,
+  },
+  greetLabel: {
+    fontSize: 11,
+    color: '#94A3B8',
+    fontWeight: '500',
+  },
+  greetName: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+    maxWidth: 200,
+  },
+  logoutBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   container: {
     flex: 1,
     paddingHorizontal: Spacing.xl,
-    paddingTop: 48,
+    paddingTop: 32,
   },
   profileHeader: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 32,
   },
   avatarImg: {
     width: 90,
@@ -146,15 +239,22 @@ const styles = StyleSheet.create({
     width: 90,
     height: 90,
     borderRadius: 45,
-    backgroundColor: '#B81414',
+    borderWidth: 2,
+    borderColor: Colors.primary,
+    padding: 2,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 3,
+    backgroundColor: '#fff',
+  },
+  // inner untuk avatar profile agar senada header admin
+  avatarInner: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 43,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   profileName: {
     fontSize: 22,
