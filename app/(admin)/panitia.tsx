@@ -15,6 +15,7 @@ import {
   RefreshControl,
   Alert,
   Animated,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -127,6 +128,7 @@ function CreatePanitiaModal({ visible, onClose, onSuccess }: CreatePanitiaModalP
           <View {...panResponder.panHandlers} style={ms.handleArea}>
             <View style={ms.handle} />
           </View>
+          <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={ms.sheetHeader}>
             <Text style={ms.sheetTitle}>Buat Akun Panitia</Text>
             <TouchableOpacity onPress={handleClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -203,6 +205,7 @@ function CreatePanitiaModal({ visible, onClose, onSuccess }: CreatePanitiaModalP
               <Text style={ms.submitBtnText}>Buat Akun Panitia</Text>
             )}
           </TouchableOpacity>
+          </ScrollView>
         </Animated.View>
       </KeyboardAvoidingView>
     </Modal>

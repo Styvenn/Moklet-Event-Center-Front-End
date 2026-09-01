@@ -156,7 +156,7 @@ function AddStudentModal({ visible, classes, onClose, onSuccess }: AddStudentMod
             </TouchableOpacity>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false}>
+          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             {/* Nama */}
             <Text style={ms.label}>Nama Lengkap *</Text>
             <TextInput

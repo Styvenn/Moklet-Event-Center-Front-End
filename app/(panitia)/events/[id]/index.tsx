@@ -16,6 +16,7 @@ import {
   Alert,
   RefreshControl,
   Linking,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -105,18 +106,22 @@ function SwipeableBottomModal({
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      {/* Backdrop */}
-      <TouchableOpacity style={ms.overlay} activeOpacity={1} onPress={onClose} />
-      <Animated.View
-        {...panResponder.panHandlers}
-        style={[ms.sheet, { transform: [{ translateY }] }]}
-      >
-        {/* Drag handle */}
-        <View style={{ paddingTop: 8, paddingBottom: 4, alignItems: "center" }}>
-          <View style={ms.handle} />
-        </View>
-        {children}
-      </Animated.View>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={ms.kav}>
+        {/* Backdrop */}
+        <TouchableOpacity style={ms.overlay} activeOpacity={1} onPress={onClose} />
+        <Animated.View
+          {...panResponder.panHandlers}
+          style={[ms.sheet, { transform: [{ translateY }] }]}
+        >
+          {/* Drag handle */}
+          <View style={{ paddingTop: 8, paddingBottom: 4, alignItems: "center" }}>
+            <View style={ms.handle} />
+          </View>
+          <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            {children}
+          </ScrollView>
+        </Animated.View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -1167,6 +1172,7 @@ const styles = StyleSheet.create({
 });
 
 const ms = StyleSheet.create({
+  kav: { flex: 1, justifyContent: "flex-end" },
   overlay: {
     flex: 1,
     // Overlay sekarang absolute fill agar backdrop dan sheet bisa overlap
@@ -1179,10 +1185,6 @@ const ms = StyleSheet.create({
     borderTopRightRadius: 20,
     padding: Spacing.base,
     maxHeight: "80%",
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
   },
   handle: {
     width: 40,

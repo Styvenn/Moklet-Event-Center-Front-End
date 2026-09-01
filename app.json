@@ -14,7 +14,7 @@
     "android": {
       "package": "id.sch.moklet.mecfront",
       "predictiveBackGestureEnabled": false,
-      "softwareKeyboardLayoutMode": "pan"
+      "softwareKeyboardLayoutMode": "resize"
     },
     "web": {
       "bundler": "metro",

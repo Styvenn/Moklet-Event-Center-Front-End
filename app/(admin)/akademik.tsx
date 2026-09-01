@@ -151,6 +151,7 @@ function AddClassModal({ visible, onClose, onSuccess }: AddClassModalProps) {
             </TouchableOpacity>
           </View>
 
+          <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           {/* Grade Selector */}
           <Text style={ms.label}>Tingkat / Grade *</Text>
           <View style={ms.gradeRow}>
@@ -224,6 +225,7 @@ function AddClassModal({ visible, onClose, onSuccess }: AddClassModalProps) {
           >
             {loading ? <ActivityIndicator color="#fff" /> : <Text style={ms.submitBtnText}>Simpan Kelas</Text>}
           </TouchableOpacity>
+          </ScrollView>
         </Animated.View>
       </KeyboardAvoidingView>
     </Modal>
@@ -327,6 +329,7 @@ function ChangeAcademicYearModal({ visible, current, onClose, onSuccess }: Chang
             </TouchableOpacity>
           </View>
 
+          <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           {/* Warning Box */}
           <View style={ms.warningBox}>
             <Ionicons name="warning" size={20} color="#B71C1C" />
@@ -395,6 +398,7 @@ function ChangeAcademicYearModal({ visible, current, onClose, onSuccess }: Chang
               )}
             </TouchableOpacity>
           </View>
+          </ScrollView>
         </Animated.View>
       </KeyboardAvoidingView>
     </Modal>
