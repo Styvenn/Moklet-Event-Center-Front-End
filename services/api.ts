@@ -2,10 +2,15 @@ import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
-// Backend berjalan di Railway — selalu gunakan URL production kecuali .env diisi secara eksplisit.
-export const API_URL = (process.env.EXPO_PUBLIC_API_URL || 'https://biruindonesiacreative.up.railway.app').replace(/\/+$/, '');
-console.log('[API Connection] Base URL configured to:', API_URL);
+// URL backend dibaca dari environment variable — jangan hardcode di sini.
+// Buat file .env di root project dan isi: EXPO_PUBLIC_API_URL=https://biruindonesiacreative.up.railway.app
+const _rawApiUrl = process.env.EXPO_PUBLIC_API_URL;
+if (!_rawApiUrl) {
+  console.warn('[API] EXPO_PUBLIC_API_URL belum diset! Buat file .env dan isi variabel tersebut.');
+}
+export const API_URL = (_rawApiUrl || '').replace(/\/+$/, '');
 const TOKEN_KEY = 'mec_auth_token';
+
 
 // Helper storage aman untuk Web & Mobile Native
 export const tokenStorage = {

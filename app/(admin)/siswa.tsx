@@ -27,8 +27,14 @@ import {
   createStudent,
   deleteStudent,
   importStudentsExcel,
+  bindManualStudent,
+  exportStudentsForPromotion,
+  importStudentsPromotion,
+  previewRosterSync,
+  executeRosterSync,
   StudentItem,
   CreateStudentDto,
+  RosterSyncPreviewResult,
 } from '../../services/admin/students.service';
 import { getClasses, ClassItem } from '../../services/admin/classes.service';
 import { getErrorMessage } from '../../services/api';
@@ -400,6 +406,391 @@ function UploadExcelModal({ visible, onClose, onSuccess }: UploadExcelModalProps
   );
 }
 
+// ─── Modal Manual Bind ─────────────────────────────────────────────────────────
+
+interface BindManualModalProps {
+  visible: boolean;
+  student: StudentItem | null;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+function BindManualModal({ visible, student, onClose, onSuccess }: BindManualModalProps) {
+  const [accountIdentifier, setAccountIdentifier] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const reset = () => { setAccountIdentifier(''); setError(''); };
+  const handleClose = () => { reset(); onClose(); };
+
+  const { translateY, overlayOpacity, panResponder } = useDragToClose(handleClose);
+
+  const handleBind = async () => {
+    if (!student) return;
+    const cleanId = accountIdentifier.trim();
+    if (!cleanId) {
+      setError('Masukkan Email atau ID Akun pengguna.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const isEmail = cleanId.includes('@');
+      await bindManualStudent(student.id, isEmail ? { email: cleanId } : { accountId: cleanId });
+      Alert.alert('Sukses', `Berhasil menautkan akun ke siswa ${student.name}`);
+      reset();
+      onSuccess();
+    } catch (e: any) {
+      setError(getErrorMessage(e, 'Gagal melakukan manual bind akun siswa.'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent statusBarTranslucent onRequestClose={handleClose}>
+      <TouchableWithoutFeedback onPress={handleClose}>
+        <Animated.View style={[ms.overlay, { opacity: overlayOpacity }]} />
+      </TouchableWithoutFeedback>
+      <View style={ms.sheetContainer} pointerEvents="box-none">
+        <Animated.View style={[ms.sheet, { transform: [{ translateY }] }]}>
+          <View {...panResponder.panHandlers} style={ms.handleArea}>
+            <View style={ms.handle} />
+          </View>
+          <View style={ms.sheetHeader}>
+            <Text style={ms.sheetTitle}>Bind Manual Akun Siswa</Text>
+            <TouchableOpacity onPress={handleClose}>
+              <Ionicons name="close" size={24} color="#607D8B" />
+            </TouchableOpacity>
+          </View>
+
+          <Text style={{ fontSize: 13, color: '#616161', marginBottom: 12 }}>
+            Siswa: <Text style={{ fontWeight: '700', color: '#1E1E1E' }}>{student?.name}</Text> ({student?.nis || '-'})
+          </Text>
+
+          <Text style={ms.label}>Email atau ID Akun Target *</Text>
+          <TextInput
+            style={ms.input}
+            placeholder="Contoh: user@smktelkom-mlg.sch.id"
+            placeholderTextColor="#9E9E9E"
+            value={accountIdentifier}
+            onChangeText={setAccountIdentifier}
+            autoCapitalize="none"
+          />
+
+          {error ? (
+            <View style={ms.errorBox}>
+              <Ionicons name="alert-circle-outline" size={18} color={Colors.primary} />
+              <Text style={ms.errorText}>{error}</Text>
+            </View>
+          ) : null}
+
+          <TouchableOpacity
+            style={[ms.submitBtn, loading && { opacity: 0.6 }]}
+            onPress={handleBind}
+            disabled={loading}
+          >
+            {loading ? <ActivityIndicator color="#fff" /> : <Text style={ms.submitBtnText}>Tautkan Akun</Text>}
+          </TouchableOpacity>
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+}
+
+// ─── Modal Promosi Kelas ───────────────────────────────────────────────────────
+
+interface PromotionModalProps {
+  visible: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+function PromotionModal({ visible, onClose, onSuccess }: PromotionModalProps) {
+  const [file, setFile] = useState<{ uri: string; name: string; mimeType: string } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [error, setError] = useState('');
+  const [result, setResult] = useState<any>(null);
+
+  const reset = () => { setFile(null); setError(''); setResult(null); };
+  const handleClose = () => { reset(); onClose(); };
+
+  const { translateY, overlayOpacity, panResponder } = useDragToClose(handleClose);
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      await exportStudentsForPromotion();
+    } catch (e: any) {
+      Alert.alert('Gagal Export', getErrorMessage(e, 'Gagal mengunduh file promosi kelas.'));
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const pickFile = async () => {
+    try {
+      const DocumentPicker = require('expo-document-picker');
+      const picked = await DocumentPicker.getDocumentAsync({
+        type: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel'],
+        copyToCacheDirectory: true,
+      });
+      if (!picked.canceled && picked.assets?.length > 0) {
+        const asset = picked.assets[0];
+        setFile({ uri: asset.uri, name: asset.name, mimeType: asset.mimeType || 'application/octet-stream' });
+        setError('');
+      }
+    } catch (e: any) {
+      setError('Gagal memilih file Excel.');
+    }
+  };
+
+  const handleImportPromotion = async () => {
+    if (!file) { setError('Pilih file Excel promosi terlebih dahulu.'); return; }
+    setLoading(true);
+    setError('');
+    try {
+      const res = await importStudentsPromotion(file.uri, file.name, file.mimeType);
+      setResult(res);
+    } catch (e: any) {
+      setError(getErrorMessage(e, 'Gagal mengimpor promosi kelas.'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent statusBarTranslucent onRequestClose={handleClose}>
+      <TouchableWithoutFeedback onPress={handleClose}>
+        <Animated.View style={[ms.overlay, { opacity: overlayOpacity }]} />
+      </TouchableWithoutFeedback>
+      <View style={ms.sheetContainer} pointerEvents="box-none">
+        <Animated.View style={[ms.sheet, { transform: [{ translateY }] }]}>
+          <View {...panResponder.panHandlers} style={ms.handleArea}>
+            <View style={ms.handle} />
+          </View>
+          <View style={ms.sheetHeader}>
+            <Text style={ms.sheetTitle}>Promosi Kelas Siswa</Text>
+            <TouchableOpacity onPress={handleClose}>
+              <Ionicons name="close" size={24} color="#607D8B" />
+            </TouchableOpacity>
+          </View>
+
+          {result ? (
+            <View style={{ alignItems: 'center', paddingVertical: Spacing.xl }}>
+              <Ionicons name="checkmark-circle-outline" size={64} color="#2E7D32" />
+              <Text style={{ fontSize: 20, fontWeight: '800', marginTop: 12, color: '#1E1E1E' }}>
+                Import Promosi Selesai
+              </Text>
+              {result.message && (
+                <Text style={{ marginTop: 8, color: '#757575', fontSize: 13, textAlign: 'center' }}>
+                  {result.message}
+                </Text>
+              )}
+              <TouchableOpacity style={[ms.submitBtn, { marginTop: Spacing.xl, width: '100%' }]} onPress={() => { reset(); onSuccess(); }}>
+                <Text style={ms.submitBtnText}>Selesai</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Export Section */}
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: '#E8F5E9',
+                  padding: 14,
+                  borderRadius: Radius.lg,
+                  marginBottom: Spacing.md,
+                  gap: 12,
+                }}
+                onPress={handleExport}
+                disabled={exporting}
+              >
+                <Ionicons name="download-outline" size={24} color="#2E7D32" />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#1B5E20' }}>Ekspor Data Promosi</Text>
+                  <Text style={{ fontSize: 12, color: '#388E3C' }}>Unduh spreadsheet data kenaikan kelas</Text>
+                </View>
+                {exporting ? <ActivityIndicator size="small" color="#2E7D32" /> : <Ionicons name="chevron-forward" size={18} color="#2E7D32" />}
+              </TouchableOpacity>
+
+              {/* Import Section */}
+              <Text style={ms.label}>Upload File Excel Promosi Kelas</Text>
+              <TouchableOpacity style={us.filePicker} onPress={pickFile} activeOpacity={0.85}>
+                <Ionicons name="cloud-upload-outline" size={36} color={Colors.primary} />
+                <Text style={us.filePickerText}>{file ? file.name : 'Ketuk untuk pilih file Excel (.xlsx)'}</Text>
+              </TouchableOpacity>
+
+              {error ? (
+                <View style={ms.errorBox}>
+                  <Ionicons name="alert-circle-outline" size={18} color={Colors.primary} />
+                  <Text style={ms.errorText}>{error}</Text>
+                </View>
+              ) : null}
+
+              <TouchableOpacity
+                style={[ms.submitBtn, (!file || loading) && { opacity: 0.5 }]}
+                onPress={handleImportPromotion}
+                disabled={!file || loading}
+              >
+                {loading ? <ActivityIndicator color="#fff" /> : <Text style={ms.submitBtnText}>Eksekusi Import Promosi</Text>}
+              </TouchableOpacity>
+            </ScrollView>
+          )}
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+}
+
+// ─── Modal Roster Sync ─────────────────────────────────────────────────────────
+
+interface SyncRosterModalProps {
+  visible: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+function SyncRosterModal({ visible, onClose, onSuccess }: SyncRosterModalProps) {
+  const [file, setFile] = useState<{ uri: string; name: string; mimeType: string } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [executing, setExecuting] = useState(false);
+  const [error, setError] = useState('');
+  const [previewData, setPreviewData] = useState<RosterSyncPreviewResult | null>(null);
+  const [execResult, setExecResult] = useState<any>(null);
+
+  const reset = () => { setFile(null); setError(''); setPreviewData(null); setExecResult(null); };
+  const handleClose = () => { reset(); onClose(); };
+
+  const { translateY, overlayOpacity, panResponder } = useDragToClose(handleClose);
+
+  const pickFile = async () => {
+    try {
+      const DocumentPicker = require('expo-document-picker');
+      const picked = await DocumentPicker.getDocumentAsync({
+        type: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel'],
+        copyToCacheDirectory: true,
+      });
+      if (!picked.canceled && picked.assets?.length > 0) {
+        const asset = picked.assets[0];
+        setFile({ uri: asset.uri, name: asset.name, mimeType: asset.mimeType || 'application/octet-stream' });
+        setError('');
+        setPreviewData(null);
+      }
+    } catch (e: any) {
+      setError('Gagal membuka file picker.');
+    }
+  };
+
+  const handlePreview = async () => {
+    if (!file) { setError('Pilih file Excel roster terlebih dahulu.'); return; }
+    setLoading(true);
+    setError('');
+    try {
+      const res = await previewRosterSync(file.uri, file.name, file.mimeType);
+      setPreviewData(res);
+    } catch (e: any) {
+      setError(getErrorMessage(e, 'Gagal memproses preview roster sync.'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExecute = async () => {
+    setExecuting(true);
+    setError('');
+    try {
+      const res = await executeRosterSync(previewData);
+      setExecResult(res);
+    } catch (e: any) {
+      setError(getErrorMessage(e, 'Gagal mengeksekusi roster sync.'));
+    } finally {
+      setExecuting(false);
+    }
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent statusBarTranslucent onRequestClose={handleClose}>
+      <TouchableWithoutFeedback onPress={handleClose}>
+        <Animated.View style={[ms.overlay, { opacity: overlayOpacity }]} />
+      </TouchableWithoutFeedback>
+      <View style={ms.sheetContainer} pointerEvents="box-none">
+        <Animated.View style={[ms.sheet, { transform: [{ translateY }] }]}>
+          <View {...panResponder.panHandlers} style={ms.handleArea}>
+            <View style={ms.handle} />
+          </View>
+          <View style={ms.sheetHeader}>
+            <Text style={ms.sheetTitle}>Sync Roster Siswa</Text>
+            <TouchableOpacity onPress={handleClose}>
+              <Ionicons name="close" size={24} color="#607D8B" />
+            </TouchableOpacity>
+          </View>
+
+          {execResult ? (
+            <View style={{ alignItems: 'center', paddingVertical: Spacing.xl }}>
+              <Ionicons name="checkmark-circle-outline" size={64} color="#2E7D32" />
+              <Text style={{ fontSize: 20, fontWeight: '800', marginTop: 12, color: '#1E1E1E' }}>
+                Roster Sync Berhasil
+              </Text>
+              {execResult.message && (
+                <Text style={{ marginTop: 8, color: '#757575', fontSize: 13, textAlign: 'center' }}>
+                  {execResult.message}
+                </Text>
+              )}
+              <TouchableOpacity style={[ms.submitBtn, { marginTop: Spacing.xl, width: '100%' }]} onPress={() => { reset(); onSuccess(); }}>
+                <Text style={ms.submitBtnText}>Selesai</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <TouchableOpacity style={us.filePicker} onPress={pickFile} activeOpacity={0.85}>
+                <Ionicons name="sync-outline" size={36} color={Colors.primary} />
+                <Text style={us.filePickerText}>{file ? file.name : 'Pilih File Roster Excel (.xlsx)'}</Text>
+              </TouchableOpacity>
+
+              {error ? (
+                <View style={ms.errorBox}>
+                  <Ionicons name="alert-circle-outline" size={18} color={Colors.primary} />
+                  <Text style={ms.errorText}>{error}</Text>
+                </View>
+              ) : null}
+
+              {!previewData ? (
+                <TouchableOpacity
+                  style={[ms.submitBtn, (!file || loading) && { opacity: 0.5 }]}
+                  onPress={handlePreview}
+                  disabled={!file || loading}
+                >
+                  {loading ? <ActivityIndicator color="#fff" /> : <Text style={ms.submitBtnText}>Preview Sync Roster</Text>}
+                </TouchableOpacity>
+              ) : (
+                <View style={{ marginTop: 12, gap: 12 }}>
+                  <View style={{ backgroundColor: '#F5F5F5', padding: 14, borderRadius: Radius.lg, gap: 6 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#1E1E1E' }}>Ringkasan Preview:</Text>
+                    <Text style={{ fontSize: 13, color: '#2E7D32' }}>➕ Siswa Baru: {previewData.added ?? 0}</Text>
+                    <Text style={{ fontSize: 13, color: '#0288D1' }}>🔄 Update Data: {previewData.updated ?? 0}</Text>
+                    <Text style={{ fontSize: 13, color: '#E65100' }}>🎓 Siswa Lulus: {previewData.graduated ?? 0}</Text>
+                  </View>
+
+                  <TouchableOpacity
+                    style={[ms.submitBtn, executing && { opacity: 0.5 }]}
+                    onPress={handleExecute}
+                    disabled={executing}
+                  >
+                    {executing ? <ActivityIndicator color="#fff" /> : <Text style={ms.submitBtnText}>Eksekusi Sync Roster</Text>}
+                  </TouchableOpacity>
+                </View>
+              )}
+            </ScrollView>
+          )}
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+}
+
 // ─── Main Screen ───────────────────────────────────────────────────────────────
 
 export default function SiswaScreen() {
@@ -407,6 +798,9 @@ export default function SiswaScreen() {
   const [search, setSearch] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showPromotionModal, setShowPromotionModal] = useState(false);
+  const [showSyncRosterModal, setShowSyncRosterModal] = useState(false);
+  const [bindTargetStudent, setBindTargetStudent] = useState<StudentItem | null>(null);
 
   const { data, isLoading, isRefetching, refetch } = useQuery({
     queryKey: queryKeys.adminStudents,
@@ -483,16 +877,38 @@ export default function SiswaScreen() {
           <Text style={styles.studentAvatarText}>{initials}</Text>
         </View>
         <View style={styles.studentInfo}>
-          <Text style={styles.studentName} numberOfLines={1}>{item.name}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={styles.studentName} numberOfLines={1}>{item.name}</Text>
+            {item.account && (
+              <View style={{ backgroundColor: '#E8F5E9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                <Text style={{ fontSize: 10, fontWeight: '700', color: '#2E7D32' }}>Bound</Text>
+              </View>
+            )}
+          </View>
           <Text style={styles.studentMeta}>{item.nis || '—'} • {kelasLabel}</Text>
         </View>
-        <TouchableOpacity
-          style={styles.actionBtn}
-          onPress={() => handleDelete(item)}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Ionicons name="trash-outline" size={18} color="#EF5350" />
-        </TouchableOpacity>
+
+        <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+          <TouchableOpacity
+            style={[styles.actionBtn, { backgroundColor: item.account ? '#E8F5E9' : '#FFF3E0' }]}
+            onPress={() => setBindTargetStudent(item)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons
+              name={item.account ? 'link' : 'link-outline'}
+              size={18}
+              color={item.account ? '#2E7D32' : '#E65100'}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionBtn}
+            onPress={() => handleDelete(item)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="trash-outline" size={18} color="#EF5350" />
+          </TouchableOpacity>
+        </View>
       </View>
     );
   };
@@ -505,10 +921,25 @@ export default function SiswaScreen() {
         <View style={styles.headerActions}>
           <TouchableOpacity
             style={styles.headerActionBtn}
+            onPress={() => setShowPromotionModal(true)}
+          >
+            <Ionicons name="trending-up-outline" size={20} color={Colors.primary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.headerActionBtn}
+            onPress={() => setShowSyncRosterModal(true)}
+          >
+            <Ionicons name="sync-outline" size={20} color={Colors.primary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.headerActionBtn}
             onPress={() => setShowUploadModal(true)}
           >
-            <Ionicons name="cloud-upload-outline" size={22} color={Colors.primary} />
+            <Ionicons name="cloud-upload-outline" size={20} color={Colors.primary} />
           </TouchableOpacity>
+
           <TouchableOpacity
             style={[styles.headerActionBtn, styles.headerAddBtn]}
             onPress={() => setShowAddModal(true)}
@@ -581,6 +1012,31 @@ export default function SiswaScreen() {
         onClose={() => setShowUploadModal(false)}
         onSuccess={() => {
           setShowUploadModal(false);
+          invalidateStudentData();
+        }}
+      />
+      <BindManualModal
+        visible={Boolean(bindTargetStudent)}
+        student={bindTargetStudent}
+        onClose={() => setBindTargetStudent(null)}
+        onSuccess={() => {
+          setBindTargetStudent(null);
+          invalidateStudentData();
+        }}
+      />
+      <PromotionModal
+        visible={showPromotionModal}
+        onClose={() => setShowPromotionModal(false)}
+        onSuccess={() => {
+          setShowPromotionModal(false);
+          invalidateStudentData();
+        }}
+      />
+      <SyncRosterModal
+        visible={showSyncRosterModal}
+        onClose={() => setShowSyncRosterModal(false)}
+        onSuccess={() => {
+          setShowSyncRosterModal(false);
           invalidateStudentData();
         }}
       />

@@ -1,5 +1,31 @@
 // services/panitia/events.service.ts
-import api from '../api';
+import { Linking } from 'react-native';
+import api, { API_URL } from '../api';
+
+/**
+ * Get URL for exporting category report (GET /export/categories/:categoryId).
+ */
+export function getExportCategoryUrl(categoryId: string): string {
+  return `${API_URL}/export/categories/${categoryId}`;
+}
+
+/**
+ * Trigger category report export download via Linking.
+ */
+export async function exportCategoryReport(categoryId: string): Promise<void> {
+  try {
+    const url = getExportCategoryUrl(categoryId);
+    const canOpen = await Linking.canOpenURL(url);
+    if (canOpen) {
+      await Linking.openURL(url);
+    } else {
+      await Linking.openURL(url);
+    }
+  } catch (error: any) {
+    console.error(`[ERROR exportCategoryReport] Category ID ${categoryId}:`, error);
+    throw error;
+  }
+}
 
 // ─── Raw API Shapes ────────────────────────────────────────────────────────────
 export interface RawEvent {

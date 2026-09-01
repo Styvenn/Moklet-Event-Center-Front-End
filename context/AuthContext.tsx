@@ -25,6 +25,14 @@ export interface UserAccount {
   student?: StudentProfile | null;
 }
 
+export interface VerifyPasswordResetDto {
+  token?: string;
+  code?: string;
+  email?: string;
+  password?: string;
+  newPassword?: string;
+}
+
 interface AuthContextType {
   user: UserAccount | null;
   token: string | null;
@@ -36,6 +44,7 @@ interface AuthContextType {
   requestOtp: (email: string) => Promise<any>;
   setupPassword: (password: string) => Promise<any>;
   bindIdentity: (studentId: string) => Promise<any>;
+  verifyPasswordReset: (dto: VerifyPasswordResetDto) => Promise<any>;
   refreshMe: () => Promise<UserAccount | null>;
   logout: () => Promise<void>;
 }
@@ -132,6 +141,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return res;
   };
 
+  const verifyPasswordReset = async (dto: VerifyPasswordResetDto) => {
+    // Sesuai API contract backend, reset password verify menggunakan HTTP POST
+    return await api.post('/auth/password/reset-verify', dto);
+  };
+
   const logout = async () => {
     await tokenStorage.removeItem();
     // Hapus seluruh cache query agar data akun sebelumnya
@@ -155,6 +169,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         requestOtp,
         setupPassword,
         bindIdentity,
+        verifyPasswordReset,
         refreshMe,
         logout,
       }}

@@ -1,5 +1,6 @@
 // services/admin/students.service.ts
-import api from '../api';
+import { Linking } from 'react-native';
+import api, { API_URL } from '../api';
 
 export interface StudentItem {
   id: string;
@@ -33,14 +34,17 @@ export interface CreateStudentDto {
   name: string;
   nis: string;
   classId: string;
-  // TODO(backend gap #3): angkatan belum didukung CreateStudentDto — simpan di state lokal saja
-  // angkatan?: number;
 }
 
 export interface UpdateStudentDto {
   name?: string;
   nis?: string;
   classId?: string;
+}
+
+export interface BindManualDto {
+  accountId?: string;
+  email?: string;
 }
 
 export interface ImportResult {
@@ -50,14 +54,29 @@ export interface ImportResult {
   message?: string;
 }
 
+export interface RosterSyncPreviewResult {
+  added?: number;
+  updated?: number;
+  graduated?: number;
+  preview?: any[];
+  message?: string;
+}
+
+export interface RosterSyncExecuteResult {
+  success?: boolean;
+  message?: string;
+  stats?: {
+    added?: number;
+    updated?: number;
+    graduated?: number;
+  };
+}
+
 /**
  * Ambil daftar siswa dengan paginasi.
- * TODO(backend gap #4): search param belum didukung backend.
- * Filter nama/kelas dilakukan client-side dari data yang sudah di-fetch.
  */
 export async function getStudents(page = 1, limit = 50): Promise<PaginatedStudents> {
   const res: any = await api.get(`/students?page=${page}&limit=${limit}`);
-  // Handle berbagai bentuk response
   if (res?.data && Array.isArray(res.data)) {
     return { data: res.data, meta: res.meta || { total: res.data.length, page, limit, totalPages: 1 } };
   }
@@ -68,24 +87,16 @@ export async function getStudents(page = 1, limit = 50): Promise<PaginatedStuden
 }
 
 export async function createStudent(dto: CreateStudentDto): Promise<StudentItem> {
-  console.log('[DEBUG createStudent] Request Payload:', JSON.stringify(dto, null, 2));
   try {
     const res: any = await api.post('/students', dto);
-    console.log('[DEBUG createStudent] Response Success:', JSON.stringify(res, null, 2));
     return res?.data || res;
   } catch (error: any) {
-    console.error('====================================================');
-    console.error('[ERROR createStudent] Gagal menambahkan siswa:');
-    console.error('- HTTP Status:', error?.statusCode || error?.response?.status || 'N/A');
-    console.error('- Response Data:', JSON.stringify(error?.response?.data || error?.data || error?.message || error, null, 2));
-    console.error('- Formatted Error:', error?.formattedMessage || error?.message);
-    console.error('====================================================');
+    console.error('[ERROR createStudent]:', error?.response?.data || error);
     throw error;
   }
 }
 
 export async function updateStudent(id: string, dto: UpdateStudentDto): Promise<StudentItem> {
-  console.log(`[DEBUG updateStudent] ID: ${id}, Payload:`, JSON.stringify(dto, null, 2));
   try {
     const res: any = await api.patch(`/students/${id}`, dto);
     return res?.data || res;
@@ -96,12 +107,23 @@ export async function updateStudent(id: string, dto: UpdateStudentDto): Promise<
 }
 
 export async function deleteStudent(id: string): Promise<void> {
-  console.log(`[DEBUG deleteStudent] Deleting student ID: ${id}`);
   try {
     await api.delete(`/students/${id}`);
-    console.log(`[DEBUG deleteStudent] Successfully deleted student ID: ${id}`);
   } catch (error: any) {
     console.error(`[ERROR deleteStudent] ID ${id}:`, error?.response?.data || error);
+    throw error;
+  }
+}
+
+/**
+ * Manual bind akun ke siswa via PATCH /students/:id/bind-manual
+ */
+export async function bindManualStudent(id: string, dto: BindManualDto): Promise<StudentItem> {
+  try {
+    const res: any = await api.patch(`/students/${id}/bind-manual`, dto);
+    return res?.data || res;
+  } catch (error: any) {
+    console.error(`[ERROR bindManualStudent] ID ${id}:`, error?.response?.data || error);
     throw error;
   }
 }
@@ -110,15 +132,125 @@ export async function deleteStudent(id: string): Promise<void> {
  * Upload file Excel siswa ke POST /students/import (multipart/form-data).
  */
 export async function importStudentsExcel(fileUri: string, fileName: string, mimeType: string): Promise<ImportResult> {
-  const formData = new FormData();
-  formData.append('file', {
-    uri: fileUri,
-    name: fileName,
-    type: mimeType,
-  } as any);
+  try {
+    const formData = new FormData();
+    formData.append('file', {
+      uri: fileUri,
+      name: fileName,
+      type: mimeType,
+    } as any);
 
-  const res: any = await api.post('/students/import', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
-  return res?.data || res;
+    const res: any = await api.post('/students/import', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res?.data || res;
+  } catch (error: any) {
+    console.error('[ERROR importStudentsExcel]:', error?.response?.data || error);
+    throw error;
+  }
 }
+
+/**
+ * Dapatkan URL ekspor promosi kelas (GET /students/export-for-promotion).
+ */
+export function getExportPromotionUrl(): string {
+  return `${API_URL}/students/export-for-promotion`;
+}
+
+/**
+ * Buka URL ekspor promosi kelas di browser/download.
+ */
+export async function exportStudentsForPromotion(): Promise<void> {
+  try {
+    const url = getExportPromotionUrl();
+    const canOpen = await Linking.canOpenURL(url);
+    if (canOpen) {
+      await Linking.openURL(url);
+    } else {
+      await Linking.openURL(url);
+    }
+  } catch (error: any) {
+    console.error('[ERROR exportStudentsForPromotion]:', error);
+    throw error;
+  }
+}
+
+/**
+ * Eksekusi import promosi kelas (POST /students/import-promotion).
+ */
+export async function importStudentsPromotion(fileUri: string, fileName: string, mimeType: string): Promise<ImportResult> {
+  try {
+    const formData = new FormData();
+    formData.append('file', {
+      uri: fileUri,
+      name: fileName,
+      type: mimeType,
+    } as any);
+
+    const res: any = await api.post('/students/import-promotion', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res?.data || res;
+  } catch (error: any) {
+    console.error('[ERROR importStudentsPromotion]:', error?.response?.data || error);
+    throw error;
+  }
+}
+
+/**
+ * Preview sync roster (POST /students/sync/preview).
+ */
+export async function previewRosterSync(fileUri: string, fileName: string, mimeType: string): Promise<RosterSyncPreviewResult> {
+  try {
+    const formData = new FormData();
+    formData.append('file', {
+      uri: fileUri,
+      name: fileName,
+      type: mimeType,
+    } as any);
+
+    const res: any = await api.post('/students/sync/preview', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res?.data || res;
+  } catch (error: any) {
+    console.error('[ERROR previewRosterSync]:', error?.response?.data || error);
+    throw error;
+  }
+}
+
+/**
+ * Eksekusi sync roster (POST /students/sync/execute).
+ */
+export async function executeRosterSync(data?: any): Promise<RosterSyncExecuteResult> {
+  try {
+    const res: any = await api.post('/students/sync/execute', data || {});
+    return res?.data || res;
+  } catch (error: any) {
+    console.error('[ERROR executeRosterSync]:', error?.response?.data || error);
+    throw error;
+  }
+}
+
+/**
+ * Upload avatar siswa ke PATCH /students/me/avatar (multipart/form-data).
+ */
+export async function uploadStudentAvatar(fileUri: string, fileName = 'avatar.jpg', mimeType = 'image/jpeg'): Promise<any> {
+  try {
+    const formData = new FormData();
+    formData.append('file', {
+      uri: fileUri,
+      name: fileName,
+      type: mimeType,
+    } as any);
+
+    const res: any = await api.patch('/students/me/avatar', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res?.data || res;
+  } catch (error: any) {
+    console.error('[ERROR uploadStudentAvatar]:', error?.response?.data || error);
+    throw error;
+  }
+}
+

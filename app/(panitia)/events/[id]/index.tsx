@@ -33,6 +33,7 @@ import {
   deleteSchedule,
   removeCommitteeMember,
   addCommitteeMember,
+  exportCategoryReport,
   EventItem,
   CategoryItem,
   ScheduleItem,
@@ -279,6 +280,16 @@ export default function EventDetailScreen() {
       "Pilih tindakan untuk cabang lomba ini:",
       [
         { text: "Batal", style: "cancel" },
+        {
+          text: "Ekspor Laporan Kategori",
+          onPress: async () => {
+            try {
+              await exportCategoryReport(cat.id);
+            } catch {
+              Alert.alert("Error", "Gagal mengunduh laporan kategori.");
+            }
+          },
+        },
         {
           text: "Edit Cabang Lomba",
           onPress: () =>

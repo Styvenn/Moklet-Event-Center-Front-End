@@ -8,6 +8,8 @@ import {
   TouchableOpacity,
   Modal,
   Pressable,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,17 +17,51 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Colors, Spacing, Radius } from '../../constants/theme';
 import { useAuth } from '../../context/AuthContext';
+import { uploadStudentAvatar } from '../../services/admin/students.service';
+import { getErrorMessage } from '../../services/api';
 
 export default function ProfileScreen() {
-  const { user, logout } = useAuth();
+  const { user, refreshMe, logout } = useAuth();
   const username = user?.student?.name || user?.email?.split('@')[0] || 'Siswa';
   const schoolLabel = 'Siswa SMK Telkom Malang';
   const avatarUrl = user?.student?.avatarUrl;
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   const handleLogout = async () => {
     setShowLogoutModal(false);
     await logout();
+  };
+
+  const handlePickAndUploadAvatar = async () => {
+    try {
+      const ImagePicker = require('expo-image-picker');
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissionResult.granted) {
+        Alert.alert('Izin Ditolak', 'Izin akses galeri diperlukan untuk memilih foto profil.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        setUploading(true);
+        const fileName = asset.fileName || 'avatar.jpg';
+        const mimeType = asset.mimeType || 'image/jpeg';
+        await uploadStudentAvatar(asset.uri, fileName, mimeType);
+        await refreshMe();
+        Alert.alert('Sukses', 'Foto profil berhasil diperbarui.');
+      }
+    } catch (e: any) {
+      Alert.alert('Gagal Upload', getErrorMessage(e, 'Gagal mengunggah foto profil.'));
+    } finally {
+      setUploading(false);
+    }
   };
 
   return (
@@ -33,13 +69,27 @@ export default function ProfileScreen() {
       <View style={styles.container}>
         {/* Center Avatar & Info (Image 2) */}
         <View style={styles.profileHeader}>
-          {avatarUrl ? (
-            <Image source={avatarUrl} style={styles.avatarImg} cachePolicy="memory-disk" />
-          ) : (
-            <View style={styles.avatarCircle}>
-              <Ionicons name="person" size={54} color="#FFFFFF" />
+          <TouchableOpacity
+            style={styles.avatarWrapper}
+            onPress={handlePickAndUploadAvatar}
+            disabled={uploading}
+            activeOpacity={0.8}
+          >
+            {avatarUrl ? (
+              <Image source={avatarUrl} style={styles.avatarImg} cachePolicy="memory-disk" />
+            ) : (
+              <View style={styles.avatarCircle}>
+                <Ionicons name="person" size={54} color="#FFFFFF" />
+              </View>
+            )}
+            <View style={styles.cameraBadge}>
+              {uploading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Ionicons name="camera" size={16} color="#fff" />
+              )}
             </View>
-          )}
+          </TouchableOpacity>
           <Text style={styles.profileName}>{username}</Text>
           <Text style={styles.profileSubtitle}>{schoolLabel}</Text>
         </View>
@@ -136,11 +186,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 40,
   },
+  avatarWrapper: {
+    position: 'relative',
+    marginBottom: 16,
+  },
   avatarImg: {
     width: 90,
     height: 90,
     borderRadius: 45,
-    marginBottom: 16,
   },
   avatarCircle: {
     width: 90,
@@ -149,12 +202,24 @@ const styles = StyleSheet.create({
     backgroundColor: '#B81414',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 10,
     elevation: 3,
+  },
+  cameraBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: Colors.primary,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
   },
   profileName: {
     fontSize: 22,
