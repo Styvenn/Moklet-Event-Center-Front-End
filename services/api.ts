@@ -2,13 +2,10 @@ import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
-// URL backend dibaca dari environment variable — jangan hardcode di sini.
-// Buat file .env di root project dan isi: EXPO_PUBLIC_API_URL=https://biruindonesiacreative.up.railway.app
-const _rawApiUrl = process.env.EXPO_PUBLIC_API_URL;
-if (!_rawApiUrl) {
-  console.warn('[API] EXPO_PUBLIC_API_URL belum diset! Buat file .env dan isi variabel tersebut.');
-}
-export const API_URL = (_rawApiUrl || '').replace(/\/+$/, '');
+// URL backend dibaca dari environment variable — jika kosong, gunakan URL backend default.
+const DEFAULT_API_URL = 'https://biruindonesiacreative.up.railway.app';
+const _rawApiUrl = process.env.EXPO_PUBLIC_API_URL || DEFAULT_API_URL;
+export const API_URL = _rawApiUrl.replace(/\/+$/, '');
 const TOKEN_KEY = 'mec_auth_token';
 
 

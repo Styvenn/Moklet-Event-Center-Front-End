@@ -15,18 +15,33 @@ import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Colors, Spacing, Radius } from '../../constants/theme';
+import { queryKeys } from '../../constants/query';
 import { useAuth } from '../../context/AuthContext';
 import { uploadStudentAvatar } from '../../services/admin/students.service';
 import { getErrorMessage } from '../../services/api';
 
 export default function ProfileScreen() {
+  const queryClient = useQueryClient();
   const { user, refreshMe, logout } = useAuth();
   const username = user?.student?.name || user?.email?.split('@')[0] || 'Siswa';
   const schoolLabel = 'Siswa SMK Telkom Malang';
   const avatarUrl = user?.student?.avatarUrl;
   const [showLogoutModal, setShowLogoutModal] = useState(false);
-  const [uploading, setUploading] = useState(false);
+
+  const avatarMutation = useMutation({
+    mutationFn: (data: { uri: string; name: string; mimeType: string }) =>
+      uploadStudentAvatar(data.uri, data.name, data.mimeType),
+    onSuccess: async () => {
+      await refreshMe();
+      queryClient.invalidateQueries({ queryKey: queryKeys.adminStudents });
+      Alert.alert('Sukses', 'Foto profil berhasil diperbarui.');
+    },
+    onError: (e: any) => {
+      Alert.alert('Gagal Upload', getErrorMessage(e, 'Gagal mengunggah foto profil.'));
+    },
+  });
 
   const handleLogout = async () => {
     setShowLogoutModal(false);
@@ -50,19 +65,16 @@ export default function ProfileScreen() {
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
-        setUploading(true);
         const fileName = asset.fileName || 'avatar.jpg';
         const mimeType = asset.mimeType || 'image/jpeg';
-        await uploadStudentAvatar(asset.uri, fileName, mimeType);
-        await refreshMe();
-        Alert.alert('Sukses', 'Foto profil berhasil diperbarui.');
+        avatarMutation.mutate({ uri: asset.uri, name: fileName, mimeType });
       }
     } catch (e: any) {
-      Alert.alert('Gagal Upload', getErrorMessage(e, 'Gagal mengunggah foto profil.'));
-    } finally {
-      setUploading(false);
+      Alert.alert('Gagal', getErrorMessage(e, 'Gagal membuka pemilih gambar.'));
     }
   };
+
+  const uploading = avatarMutation.isPending;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -91,7 +103,6 @@ export default function ProfileScreen() {
       <View style={styles.container}>
         {/* Center Avatar & Info */}
         <View style={styles.profileHeader}>
-<<<<<<< HEAD
           <TouchableOpacity
             style={styles.avatarWrapper}
             onPress={handlePickAndUploadAvatar}
@@ -102,7 +113,9 @@ export default function ProfileScreen() {
               <Image source={avatarUrl} style={styles.avatarImg} cachePolicy="memory-disk" />
             ) : (
               <View style={styles.avatarCircle}>
-                <Ionicons name="person" size={54} color="#FFFFFF" />
+                <View style={styles.avatarInner}>
+                  <Ionicons name="person" size={48} color={Colors.primary} />
+                </View>
               </View>
             )}
             <View style={styles.cameraBadge}>
@@ -111,15 +124,6 @@ export default function ProfileScreen() {
               ) : (
                 <Ionicons name="camera" size={16} color="#fff" />
               )}
-=======
-          {avatarUrl ? (
-            <Image source={avatarUrl} style={styles.avatarImg} cachePolicy="memory-disk" />
-          ) : (
-            <View style={styles.avatarCircle}>
-              <View style={styles.avatarInner}>
-                <Ionicons name="person" size={48} color={Colors.primary} />
-              </View>
->>>>>>> d85ef795fcb47ec3d989b3a853dd8a2360e78f8f
             </View>
           </TouchableOpacity>
           <Text style={styles.profileName}>{username}</Text>
@@ -305,15 +309,12 @@ const styles = StyleSheet.create({
     padding: 2,
     alignItems: 'center',
     justifyContent: 'center',
-<<<<<<< HEAD
+    backgroundColor: '#fff',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 10,
     elevation: 3,
-=======
-    marginBottom: 16,
-    backgroundColor: '#fff',
   },
   // inner untuk avatar profile agar senada header admin
   avatarInner: {
@@ -323,7 +324,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEE2E2',
     alignItems: 'center',
     justifyContent: 'center',
->>>>>>> d85ef795fcb47ec3d989b3a853dd8a2360e78f8f
   },
   cameraBadge: {
     position: 'absolute',

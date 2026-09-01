@@ -416,8 +416,8 @@ interface BindManualModalProps {
 }
 
 function BindManualModal({ visible, student, onClose, onSuccess }: BindManualModalProps) {
+  const queryClient = useQueryClient();
   const [accountIdentifier, setAccountIdentifier] = useState('');
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const reset = () => { setAccountIdentifier(''); setError(''); };
@@ -425,27 +425,33 @@ function BindManualModal({ visible, student, onClose, onSuccess }: BindManualMod
 
   const { translateY, overlayOpacity, panResponder } = useDragToClose(handleClose);
 
-  const handleBind = async () => {
+  const bindMutation = useMutation({
+    mutationFn: (dto: { accountId?: string; email?: string }) => bindManualStudent(student!.id, dto),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.adminStudents });
+      queryClient.invalidateQueries({ queryKey: queryKeys.adminStats });
+      Alert.alert('Sukses', `Berhasil menautkan akun ke siswa ${student?.name}`);
+      reset();
+      onSuccess();
+    },
+    onError: (e: any) => {
+      setError(getErrorMessage(e, 'Gagal melakukan manual bind akun siswa.'));
+    },
+  });
+
+  const handleBind = () => {
     if (!student) return;
     const cleanId = accountIdentifier.trim();
     if (!cleanId) {
       setError('Masukkan Email atau ID Akun pengguna.');
       return;
     }
-    setLoading(true);
     setError('');
-    try {
-      const isEmail = cleanId.includes('@');
-      await bindManualStudent(student.id, isEmail ? { email: cleanId } : { accountId: cleanId });
-      Alert.alert('Sukses', `Berhasil menautkan akun ke siswa ${student.name}`);
-      reset();
-      onSuccess();
-    } catch (e: any) {
-      setError(getErrorMessage(e, 'Gagal melakukan manual bind akun siswa.'));
-    } finally {
-      setLoading(false);
-    }
+    const isEmail = cleanId.includes('@');
+    bindMutation.mutate(isEmail ? { email: cleanId } : { accountId: cleanId });
   };
+
+  const loading = bindMutation.isPending;
 
   return (
     <Modal visible={visible} animationType="slide" transparent statusBarTranslucent onRequestClose={handleClose}>
@@ -507,8 +513,8 @@ interface PromotionModalProps {
 }
 
 function PromotionModal({ visible, onClose, onSuccess }: PromotionModalProps) {
+  const queryClient = useQueryClient();
   const [file, setFile] = useState<{ uri: string; name: string; mimeType: string } | null>(null);
-  const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState<any>(null);
@@ -517,6 +523,19 @@ function PromotionModal({ visible, onClose, onSuccess }: PromotionModalProps) {
   const handleClose = () => { reset(); onClose(); };
 
   const { translateY, overlayOpacity, panResponder } = useDragToClose(handleClose);
+
+  const importPromotionMutation = useMutation({
+    mutationFn: (fileData: { uri: string; name: string; mimeType: string }) =>
+      importStudentsPromotion(fileData.uri, fileData.name, fileData.mimeType),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.adminStudents });
+      queryClient.invalidateQueries({ queryKey: queryKeys.adminStats });
+      setResult(res);
+    },
+    onError: (e: any) => {
+      setError(getErrorMessage(e, 'Gagal mengimpor promosi kelas.'));
+    },
+  });
 
   const handleExport = async () => {
     setExporting(true);
@@ -546,19 +565,13 @@ function PromotionModal({ visible, onClose, onSuccess }: PromotionModalProps) {
     }
   };
 
-  const handleImportPromotion = async () => {
+  const handleImportPromotion = () => {
     if (!file) { setError('Pilih file Excel promosi terlebih dahulu.'); return; }
-    setLoading(true);
     setError('');
-    try {
-      const res = await importStudentsPromotion(file.uri, file.name, file.mimeType);
-      setResult(res);
-    } catch (e: any) {
-      setError(getErrorMessage(e, 'Gagal mengimpor promosi kelas.'));
-    } finally {
-      setLoading(false);
-    }
+    importPromotionMutation.mutate(file);
   };
+
+  const loading = importPromotionMutation.isPending;
 
   return (
     <Modal visible={visible} animationType="slide" transparent statusBarTranslucent onRequestClose={handleClose}>
@@ -654,9 +667,8 @@ interface SyncRosterModalProps {
 }
 
 function SyncRosterModal({ visible, onClose, onSuccess }: SyncRosterModalProps) {
+  const queryClient = useQueryClient();
   const [file, setFile] = useState<{ uri: string; name: string; mimeType: string } | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [executing, setExecuting] = useState(false);
   const [error, setError] = useState('');
   const [previewData, setPreviewData] = useState<RosterSyncPreviewResult | null>(null);
   const [execResult, setExecResult] = useState<any>(null);
@@ -665,6 +677,29 @@ function SyncRosterModal({ visible, onClose, onSuccess }: SyncRosterModalProps) 
   const handleClose = () => { reset(); onClose(); };
 
   const { translateY, overlayOpacity, panResponder } = useDragToClose(handleClose);
+
+  const previewMutation = useMutation({
+    mutationFn: (fileData: { uri: string; name: string; mimeType: string }) =>
+      previewRosterSync(fileData.uri, fileData.name, fileData.mimeType),
+    onSuccess: (res) => {
+      setPreviewData(res);
+    },
+    onError: (e: any) => {
+      setError(getErrorMessage(e, 'Gagal memproses preview roster sync.'));
+    },
+  });
+
+  const executeMutation = useMutation({
+    mutationFn: (data?: any) => executeRosterSync(data),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.adminStudents });
+      queryClient.invalidateQueries({ queryKey: queryKeys.adminStats });
+      setExecResult(res);
+    },
+    onError: (e: any) => {
+      setError(getErrorMessage(e, 'Gagal mengeksekusi roster sync.'));
+    },
+  });
 
   const pickFile = async () => {
     try {
@@ -684,32 +719,19 @@ function SyncRosterModal({ visible, onClose, onSuccess }: SyncRosterModalProps) 
     }
   };
 
-  const handlePreview = async () => {
+  const handlePreview = () => {
     if (!file) { setError('Pilih file Excel roster terlebih dahulu.'); return; }
-    setLoading(true);
     setError('');
-    try {
-      const res = await previewRosterSync(file.uri, file.name, file.mimeType);
-      setPreviewData(res);
-    } catch (e: any) {
-      setError(getErrorMessage(e, 'Gagal memproses preview roster sync.'));
-    } finally {
-      setLoading(false);
-    }
+    previewMutation.mutate(file);
   };
 
-  const handleExecute = async () => {
-    setExecuting(true);
+  const handleExecute = () => {
     setError('');
-    try {
-      const res = await executeRosterSync(previewData);
-      setExecResult(res);
-    } catch (e: any) {
-      setError(getErrorMessage(e, 'Gagal mengeksekusi roster sync.'));
-    } finally {
-      setExecuting(false);
-    }
+    executeMutation.mutate(previewData);
   };
+
+  const loading = previewMutation.isPending;
+  const executing = executeMutation.isPending;
 
   return (
     <Modal visible={visible} animationType="slide" transparent statusBarTranslucent onRequestClose={handleClose}>
